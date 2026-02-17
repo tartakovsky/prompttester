@@ -208,11 +208,94 @@ That's it. No database URLs, no auth secrets, no service tokens. The tool is des
 
 ## Deployment
 
-The project builds to a standard Next.js app. Deploy anywhere that runs Node.js:
-- **Vercel** — `npx vercel` from the `apps/web` directory
-- **Railway** — Point at the repo, set build command to `cd apps/web && npm run build`
+### Local Development
+
+```bash
+cd ~/Projects/prompttester
+npm install
+npm run dev
+# Opens at http://localhost:3000
+```
+
+### Railway (Production)
+
+The project deploys to **Railway** as a single service. Railway auto-deploys from git pushes to `main`.
+
+**Service configuration:**
+
+| Setting | Value |
+|---------|-------|
+| Service name | `web` |
+| Root directory | `apps/web` |
+| Build command | `npm install && npm run build` |
+| Start command | `npm start` |
+| Port | `3000` |
+
+**Environment variables on Railway:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENROUTER_API_KEY` | No | Optional fallback API key. Users can also provide their own key via the UI. |
+| `PORT` | No | Railway sets this automatically (defaults to 3000) |
+
+That's it — no database, no auth secrets, no inter-service communication.
+
+**Railway CLI** (`railway`) is available for managing the deployment:
+
+```bash
+# Check status
+railway whoami
+railway status
+
+# View logs
+railway logs -s web
+railway logs -s web --build
+
+# Trigger redeployment from git
+railway redeploy --yes
+
+# View/set environment variables
+railway variables -s web
+```
+
+**CRITICAL: Do NOT use `railway up` to deploy.** Railway is configured to auto-deploy from git. Push to `main` and Railway handles the rest. Using `railway up` breaks deployments by uploading with incorrect root directory structure.
+
+**Deployment flow:**
+1. Make changes
+2. Commit and push to `main`
+3. Railway detects the push, builds `apps/web`, and deploys
+
+### Other deployment options
+
+- **Vercel** — `cd apps/web && npx vercel`
 - **Docker** — Standard Next.js Dockerfile
-- **Local** — `npm run dev` at root
+- **Any Node.js host** — `npm run build && npm start` in `apps/web`
+
+## Available Toolchain
+
+The following CLI tools are available and should be used when relevant:
+
+- **GitHub CLI** (`gh`) — repos, PRs, issues
+- **Railway CLI** (`railway`) — deployments, logs, variables
+- **Node.js / npm** — build, dev, package management
+- **Turborepo** (`turbo`) — monorepo task runner (installed as dev dependency)
+
+The project uses **npm workspaces** (not pnpm/yarn). The root `package.json` defines `"workspaces": ["apps/*"]`.
+
+## Build Commands
+
+```bash
+# From project root
+npm install          # Install all dependencies
+npm run dev          # Start dev server (via Turborepo)
+npm run build        # Production build (via Turborepo)
+
+# From apps/web directly
+cd apps/web
+npm run dev          # Next.js dev with Turbopack
+npm run build        # Next.js production build
+npm run start        # Start production server
+```
 
 ## Differences from AutoSMM Version
 

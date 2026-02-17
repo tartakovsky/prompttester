@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth, SignIn } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -338,6 +339,22 @@ function ResultCell({
 // ─── Main Component ──────────────────────────────────────────
 
 export default function PromptTesterPage() {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) return null;
+
+  if (!isSignedIn) {
+    return (
+      <div className="flex min-h-[80vh] flex-col items-center justify-center p-8">
+        <SignIn withSignUp routing="virtual" />
+      </div>
+    );
+  }
+
+  return <PromptTester />;
+}
+
+function PromptTester() {
   // API key
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);

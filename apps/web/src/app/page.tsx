@@ -54,11 +54,12 @@ interface ResultSnapshot {
 // ─── Default Models ──────────────────────────────────────────
 
 const DEFAULT_MODELS: ModelItem[] = [
-  { id: 'm1', name: 'gemini-2.0-flash', modelId: 'google/gemini-2.0-flash' },
-  { id: 'm2', name: 'deepseek-chat-v3', modelId: 'deepseek/deepseek-chat-v3' },
-  { id: 'm3', name: 'llama-3.3-70b-instruct', modelId: 'meta-llama/llama-3.3-70b-instruct' },
-  { id: 'm4', name: 'claude-3.5-haiku', modelId: 'anthropic/claude-3.5-haiku' },
-  { id: 'm5', name: 'qwen-2.5-72b-instruct', modelId: 'qwen/qwen-2.5-72b-instruct' },
+  { id: 'm1', name: 'mistral-small-3.2-24b-instruct', modelId: 'mistralai/mistral-small-3.2-24b-instruct' },
+  { id: 'm2', name: 'gemini-2.5-flash-lite', modelId: 'google/gemini-2.5-flash-lite' },
+  { id: 'm3', name: 'gemini-3-flash-preview', modelId: 'google/gemini-3-flash-preview' },
+  { id: 'm4', name: 'claude-opus-4.6', modelId: 'anthropic/claude-opus-4.6' },
+  { id: 'm5', name: 'claude-opus-4.5', modelId: 'anthropic/claude-opus-4.5' },
+  { id: 'm6', name: 'gpt-5.2-chat', modelId: 'openai/gpt-5.2-chat' },
 ];
 
 function makeDefaultTest(id: string, name: string): TestConfig {
@@ -113,6 +114,15 @@ function genId(prefix: string): string {
 
 // ─── Item List (shared sidebar component) ────────────────────
 
+type SectionAccent = 'stone' | 'slate' | 'zinc' | 'neutral';
+
+const accentStyles: Record<SectionAccent, { active: string; hover: string; add: string }> = {
+  stone:   { active: 'border-stone-400 bg-stone-100 dark:bg-stone-800/30 text-stone-900 dark:text-stone-100', hover: 'hover:border-stone-300 dark:hover:border-stone-600', add: 'hover:border-stone-300 dark:hover:border-stone-600' },
+  slate:   { active: 'border-slate-400 bg-slate-100 dark:bg-slate-800/30 text-slate-900 dark:text-slate-100', hover: 'hover:border-slate-300 dark:hover:border-slate-600', add: 'hover:border-slate-300 dark:hover:border-slate-600' },
+  zinc:    { active: 'border-zinc-400 bg-zinc-100 dark:bg-zinc-800/30 text-zinc-900 dark:text-zinc-100', hover: 'hover:border-zinc-300 dark:hover:border-zinc-600', add: 'hover:border-zinc-300 dark:hover:border-zinc-600' },
+  neutral: { active: 'border-primary bg-primary/10 text-foreground', hover: 'hover:border-primary/40', add: 'hover:border-primary/40' },
+};
+
 function ItemList({
   items,
   activeId,
@@ -121,6 +131,7 @@ function ItemList({
   onRemove,
   onRename,
   readOnly = false,
+  accent = 'neutral',
 }: {
   items: ListItem[];
   activeId: string;
@@ -129,6 +140,7 @@ function ItemList({
   onRemove?: (id: string) => void;
   onRename?: (id: string, name: string) => void;
   readOnly?: boolean;
+  accent?: SectionAccent;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -156,8 +168,8 @@ function ItemList({
           className={cn(
             'group flex items-center rounded-md border px-2.5 py-1.5 text-sm cursor-pointer select-none transition-colors',
             item.id === activeId
-              ? 'border-primary bg-primary/10 text-foreground'
-              : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
+              ? accentStyles[accent].active
+              : `border-border text-muted-foreground ${accentStyles[accent].hover} hover:text-foreground`
           )}
           onClick={() => onSelect(item.id)}
           onDoubleClick={() => {
@@ -198,7 +210,7 @@ function ItemList({
       {!readOnly && onAdd && (
         <button
           onClick={onAdd}
-          className="flex items-center justify-center rounded-md border border-dashed border-border px-2.5 py-1.5 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+          className={cn('flex items-center justify-center rounded-md border border-dashed border-border px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors', accentStyles[accent].add)}
         >
           +
         </button>
@@ -794,7 +806,7 @@ function PromptTester() {
   // ─── Render ────────────────────────────────────────────────
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+    <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-6">
       {/* Header */}
       <div>
         <h1 className="text-lg font-semibold">Prompt Tester</h1>
@@ -844,9 +856,9 @@ function PromptTester() {
       </div>
 
       {/* ═══ INPUTS ═══ */}
-      <section className="w-full max-w-3xl space-y-3">
+      <section className="w-full max-w-3xl space-y-3 mt-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground/70">
+          <h2 className="text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">
             Inputs ({validInputs.length} with content)
           </h2>
           <Separator className="flex-1" />
@@ -860,6 +872,7 @@ function PromptTester() {
             onAdd={addInput}
             onRemove={removeInput}
             onRename={renameInput}
+            accent="stone"
           />
           <div className="flex-1 min-w-0">
             <textarea
@@ -878,9 +891,9 @@ function PromptTester() {
       </section>
 
       {/* ═══ PROMPTS ═══ */}
-      <section className="w-full max-w-3xl space-y-3">
+      <section className="w-full max-w-3xl space-y-3 mt-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground/70">
+          <h2 className="text-xs font-medium uppercase tracking-widest text-slate-500 dark:text-slate-400">
             Prompts
           </h2>
           <Separator className="flex-1" />
@@ -894,6 +907,7 @@ function PromptTester() {
             onAdd={addPrompt}
             onRemove={removePrompt}
             onRename={renamePrompt}
+            accent="slate"
           />
           <div className="flex-1 min-w-0">
             <textarea
@@ -907,9 +921,9 @@ function PromptTester() {
       </section>
 
       {/* ═══ MODELS ═══ */}
-      <section className="w-full max-w-3xl space-y-3">
+      <section className="w-full max-w-3xl space-y-3 mt-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground/70">
+          <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
             Models ({models.length})
           </h2>
           <Separator className="flex-1" />
@@ -923,6 +937,7 @@ function PromptTester() {
             onAdd={addEmptyModel}
             onRemove={removeModel}
             onRename={renameModel}
+            accent="zinc"
           />
           <div className="flex-1 min-w-0 space-y-3">
             <p className="text-xs text-muted-foreground">

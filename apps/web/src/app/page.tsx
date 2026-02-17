@@ -27,6 +27,7 @@ interface PromptItem extends ListItem {
 
 interface ModelItem extends ListItem {
   modelId: string;
+  enabled: boolean;
 }
 
 interface CellResult {
@@ -54,12 +55,12 @@ interface ResultSnapshot {
 // ─── Default Models ──────────────────────────────────────────
 
 const DEFAULT_MODELS: ModelItem[] = [
-  { id: 'm1', name: 'mistral-small-3.2-24b-instruct', modelId: 'mistralai/mistral-small-3.2-24b-instruct' },
-  { id: 'm2', name: 'gemini-2.5-flash-lite', modelId: 'google/gemini-2.5-flash-lite' },
-  { id: 'm3', name: 'gemini-3-flash-preview', modelId: 'google/gemini-3-flash-preview' },
-  { id: 'm4', name: 'claude-opus-4.6', modelId: 'anthropic/claude-opus-4.6' },
-  { id: 'm5', name: 'claude-opus-4.5', modelId: 'anthropic/claude-opus-4.5' },
-  { id: 'm6', name: 'gpt-5.2-chat', modelId: 'openai/gpt-5.2-chat' },
+  { id: 'm1', name: 'mistral-small-3.2-24b-instruct', modelId: 'mistralai/mistral-small-3.2-24b-instruct', enabled: true },
+  { id: 'm2', name: 'gemini-2.5-flash-lite', modelId: 'google/gemini-2.5-flash-lite', enabled: true },
+  { id: 'm3', name: 'gemini-3-flash-preview', modelId: 'google/gemini-3-flash-preview', enabled: true },
+  { id: 'm4', name: 'claude-opus-4.6', modelId: 'anthropic/claude-opus-4.6', enabled: true },
+  { id: 'm5', name: 'claude-opus-4.5', modelId: 'anthropic/claude-opus-4.5', enabled: true },
+  { id: 'm6', name: 'gpt-5.2-chat', modelId: 'openai/gpt-5.2-chat', enabled: true },
 ];
 
 function makeDefaultTest(id: string, name: string): TestConfig {
@@ -114,13 +115,13 @@ function genId(prefix: string): string {
 
 // ─── Item List (shared sidebar component) ────────────────────
 
-type SectionAccent = 'stone' | 'slate' | 'zinc' | 'neutral';
+type SectionAccent = 'amber' | 'blue' | 'violet' | 'neutral';
 
-const accentStyles: Record<SectionAccent, { active: string; hover: string; add: string }> = {
-  stone:   { active: 'border-stone-400 bg-stone-100 dark:bg-stone-800/30 text-stone-900 dark:text-stone-100', hover: 'hover:border-stone-300 dark:hover:border-stone-600', add: 'hover:border-stone-300 dark:hover:border-stone-600' },
-  slate:   { active: 'border-slate-400 bg-slate-100 dark:bg-slate-800/30 text-slate-900 dark:text-slate-100', hover: 'hover:border-slate-300 dark:hover:border-slate-600', add: 'hover:border-slate-300 dark:hover:border-slate-600' },
-  zinc:    { active: 'border-zinc-400 bg-zinc-100 dark:bg-zinc-800/30 text-zinc-900 dark:text-zinc-100', hover: 'hover:border-zinc-300 dark:hover:border-zinc-600', add: 'hover:border-zinc-300 dark:hover:border-zinc-600' },
-  neutral: { active: 'border-primary bg-primary/10 text-foreground', hover: 'hover:border-primary/40', add: 'hover:border-primary/40' },
+const accentStyles: Record<SectionAccent, { active: string; hover: string; add: string; title: string; label: string }> = {
+  amber:   { active: 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100', hover: 'hover:border-amber-300 dark:hover:border-amber-600', add: 'hover:border-amber-300 dark:hover:border-amber-600', title: 'text-amber-600 dark:text-amber-400', label: 'text-amber-700 dark:text-amber-300' },
+  blue:    { active: 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100', hover: 'hover:border-blue-300 dark:hover:border-blue-600', add: 'hover:border-blue-300 dark:hover:border-blue-600', title: 'text-blue-600 dark:text-blue-400', label: 'text-blue-700 dark:text-blue-300' },
+  violet:  { active: 'border-violet-400 bg-violet-50 dark:bg-violet-900/20 text-violet-900 dark:text-violet-100', hover: 'hover:border-violet-300 dark:hover:border-violet-600', add: 'hover:border-violet-300 dark:hover:border-violet-600', title: 'text-violet-600 dark:text-violet-400', label: 'text-violet-700 dark:text-violet-300' },
+  neutral: { active: 'border-primary bg-primary/10 text-foreground', hover: 'hover:border-primary/40', add: 'hover:border-primary/40', title: 'text-muted-foreground', label: 'text-foreground' },
 };
 
 function ItemList({
@@ -130,15 +131,17 @@ function ItemList({
   onAdd,
   onRemove,
   onRename,
+  onToggle,
   readOnly = false,
   accent = 'neutral',
 }: {
-  items: ListItem[];
+  items: (ListItem & { enabled?: boolean })[];
   activeId: string;
   onSelect: (id: string) => void;
   onAdd?: () => void;
   onRemove?: (id: string) => void;
   onRename?: (id: string, name: string) => void;
+  onToggle?: (id: string) => void;
   readOnly?: boolean;
   accent?: SectionAccent;
 }) {
@@ -162,51 +165,76 @@ function ItemList({
 
   return (
     <div className="flex w-[170px] min-w-[170px] md:w-[200px] md:min-w-[200px] flex-col gap-0.5">
-      {items.map((item) => (
-        <div
-          key={item.id}
-          className={cn(
-            'group flex items-center rounded-md border px-2.5 py-1.5 text-sm cursor-pointer select-none transition-colors',
-            item.id === activeId
-              ? accentStyles[accent].active
-              : `border-border text-muted-foreground ${accentStyles[accent].hover} hover:text-foreground`
-          )}
-          onClick={() => onSelect(item.id)}
-          onDoubleClick={() => {
-            if (readOnly) return;
-            setEditingId(item.id);
-            setEditName(item.name);
-          }}
-        >
-          {editingId === item.id ? (
-            <input
-              ref={inputRef}
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={finish}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') finish();
-                if (e.key === 'Escape') setEditingId(null);
-              }}
-              className="w-full bg-transparent text-sm outline-none"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="flex-1 truncate">{item.name}</span>
-          )}
-          {!readOnly && items.length > 1 && editingId !== item.id && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove?.(item.id);
-              }}
-              className="ml-1 shrink-0 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-            >
-              &times;
-            </button>
-          )}
-        </div>
-      ))}
+      {items.map((item) => {
+        const isDisabled = item.enabled === false;
+        return (
+          <div
+            key={item.id}
+            className={cn(
+              'group flex items-center rounded-md border px-2.5 py-1.5 text-sm cursor-pointer select-none transition-colors',
+              isDisabled && 'opacity-40',
+              item.id === activeId && !isDisabled
+                ? accentStyles[accent].active
+                : `border-border text-muted-foreground ${accentStyles[accent].hover} hover:text-foreground`
+            )}
+            onClick={() => onSelect(item.id)}
+            onDoubleClick={() => {
+              if (readOnly) return;
+              setEditingId(item.id);
+              setEditName(item.name);
+            }}
+          >
+            {onToggle && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(item.id);
+                }}
+                className={cn(
+                  'mr-1.5 shrink-0 h-3.5 w-3.5 rounded-sm border transition-colors',
+                  isDisabled
+                    ? 'border-muted-foreground/30 bg-transparent'
+                    : `border-current bg-current`
+                )}
+                title={isDisabled ? 'Enable' : 'Disable'}
+              >
+                {!isDisabled && (
+                  <svg viewBox="0 0 14 14" className="h-full w-full text-white dark:text-black">
+                    <path d="M3 7l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            )}
+            {editingId === item.id ? (
+              <input
+                ref={inputRef}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={finish}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') finish();
+                  if (e.key === 'Escape') setEditingId(null);
+                }}
+                className="w-full bg-transparent text-sm outline-none"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className={cn('flex-1 truncate', isDisabled && 'line-through')}>{item.name}</span>
+            )}
+            {!readOnly && !onToggle && items.length > 1 && editingId !== item.id && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove?.(item.id);
+                }}
+                className="ml-1 shrink-0 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+              >
+                &times;
+              </button>
+            )}
+          </div>
+        );
+      })}
       {!readOnly && onAdd && (
         <button
           onClick={onAdd}
@@ -431,6 +459,7 @@ function PromptTester() {
   const activePrompt = prompts.find(p => p.id === activePromptId) ?? prompts[0]!;
   const activeModel = models.find(m => m.id === activeModelId) ?? models[0]!;
   const hasAnyResults = resultSnapshot !== null && resultSnapshot.prompts.some(p => Object.keys(p.results).length > 0);
+  const enabledModels = models.filter(m => m.enabled !== false);
   const validInputs = inputs.filter(i => i.content.trim().length > 0);
 
   // ─── Update current test helper ────────────────────────────
@@ -447,6 +476,12 @@ function PromptTester() {
 
     const savedTests = cacheLoad<TestConfig[]>('tests');
     if (savedTests && savedTests.length > 0) {
+      // Migrate: add enabled field to models that don't have it
+      for (const test of savedTests) {
+        for (const m of test.models) {
+          if (m.enabled === undefined) m.enabled = true;
+        }
+      }
       setTests(savedTests);
       const savedActiveId = cacheLoadStr('activeTestId');
       const activeId = savedActiveId && savedTests.some(t => t.id === savedActiveId) ? savedActiveId : savedTests[0]!.id;
@@ -689,6 +724,13 @@ function PromptTester() {
     updateCurrentTest(t => ({ ...t, models: t.models.map(m => m.id === id ? { ...m, name } : m) }));
   }, [updateCurrentTest]);
 
+  const toggleModel = useCallback((id: string) => {
+    updateCurrentTest(t => ({
+      ...t,
+      models: t.models.map(m => m.id === id ? { ...m, enabled: m.enabled === false ? true : false } : m),
+    }));
+  }, [updateCurrentTest]);
+
 
   const setTemperature = useCallback((temp: number) => {
     updateCurrentTest(t => ({ ...t, temperature: temp }));
@@ -708,12 +750,13 @@ function PromptTester() {
   // ─── Run Evaluation ────────────────────────────────────────
 
   const promptsToRun = prompts.filter(p => p.prompt.trim().length > 0);
-  const canEval = validInputs.length > 0 && models.length > 0 && promptsToRun.length > 0 && !evaluating && apiKey.trim().length > 0;
+  const canEval = validInputs.length > 0 && enabledModels.length > 0 && promptsToRun.length > 0 && !evaluating && apiKey.trim().length > 0;
 
   const runEval = useCallback(async () => {
     const toRun = prompts.filter(p => p.prompt.trim().length > 0);
     const validIns = inputs.filter(i => i.content.trim().length > 0);
-    const modelIds = models.map(m => m.modelId);
+    const activeModels = models.filter(m => m.enabled !== false);
+    const modelIds = activeModels.map(m => m.modelId);
     if (toRun.length === 0 || validIns.length === 0 || modelIds.length === 0) return;
 
     evalAbortRef.current?.abort();
@@ -728,7 +771,7 @@ function PromptTester() {
 
     // Snapshot inputs and models at eval start
     const snapshotInputs = validIns.map(i => ({ ...i }));
-    const snapshotModels = models.map(m => ({ ...m }));
+    const snapshotModels = activeModels.map(m => ({ ...m }));
     // Build snapshot prompts as results come in
     const snapshotPrompts: PromptItem[] = toRun.map(p => ({ ...p, results: {} }));
 
@@ -858,7 +901,7 @@ function PromptTester() {
       {/* ═══ INPUTS ═══ */}
       <section className="w-full max-w-3xl space-y-3 mt-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">
+          <h2 className={cn('text-xs font-medium uppercase tracking-widest', accentStyles.amber.title)}>
             Inputs ({validInputs.length} with content)
           </h2>
           <Separator className="flex-1" />
@@ -872,7 +915,7 @@ function PromptTester() {
             onAdd={addInput}
             onRemove={removeInput}
             onRename={renameInput}
-            accent="stone"
+            accent="amber"
           />
           <div className="flex-1 min-w-0">
             <textarea
@@ -893,7 +936,7 @@ function PromptTester() {
       {/* ═══ PROMPTS ═══ */}
       <section className="w-full max-w-3xl space-y-3 mt-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-medium uppercase tracking-widest text-slate-500 dark:text-slate-400">
+          <h2 className={cn('text-xs font-medium uppercase tracking-widest', accentStyles.blue.title)}>
             Prompts
           </h2>
           <Separator className="flex-1" />
@@ -907,7 +950,7 @@ function PromptTester() {
             onAdd={addPrompt}
             onRemove={removePrompt}
             onRename={renamePrompt}
-            accent="slate"
+            accent="blue"
           />
           <div className="flex-1 min-w-0">
             <textarea
@@ -923,8 +966,8 @@ function PromptTester() {
       {/* ═══ MODELS ═══ */}
       <section className="w-full max-w-3xl space-y-3 mt-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
-            Models ({models.length})
+          <h2 className={cn('text-xs font-medium uppercase tracking-widest', accentStyles.violet.title)}>
+            Models ({enabledModels.length} of {models.length} enabled)
           </h2>
           <Separator className="flex-1" />
         </div>
@@ -937,7 +980,8 @@ function PromptTester() {
             onAdd={addEmptyModel}
             onRemove={removeModel}
             onRename={renameModel}
-            accent="zinc"
+            onToggle={toggleModel}
+            accent="violet"
           />
           <div className="flex-1 min-w-0 space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -965,7 +1009,7 @@ function PromptTester() {
           {evaluating ? evalProgress || 'Evaluating...' : 'Run All Prompts'}
         </Button>
         <span className="text-xs text-muted-foreground">
-          {promptsToRun.length} prompt{promptsToRun.length !== 1 ? 's' : ''} &times; {models.length} model{models.length !== 1 ? 's' : ''} &times; {validInputs.length} input{validInputs.length !== 1 ? 's' : ''}
+          {promptsToRun.length} prompt{promptsToRun.length !== 1 ? 's' : ''} &times; {enabledModels.length} model{enabledModels.length !== 1 ? 's' : ''} &times; {validInputs.length} input{validInputs.length !== 1 ? 's' : ''}
         </span>
         {!apiKey.trim() && (
           <span className="text-xs text-amber-500 dark:text-amber-400">Enter your OpenRouter API key above</span>
@@ -1080,7 +1124,7 @@ function PromptTester() {
                 {viewMode === 'prompt-first'
                   ? snapPrompts.map(p => (
                       <div key={p.id} className="px-4 pb-3">
-                        <h3 className="text-sm font-semibold text-foreground mb-1.5">{p.name}</h3>
+                        <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.blue.label)}>{p.name}</h3>
                         <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                           {p.prompt || '(empty)'}
                         </pre>
@@ -1088,7 +1132,7 @@ function PromptTester() {
                     ))
                   : snapModels.map(m => (
                       <div key={m.id} className="px-4 pb-3">
-                        <h3 className="text-sm font-semibold font-mono text-foreground">{m.name}</h3>
+                        <h3 className={cn('text-sm font-semibold font-mono', accentStyles.violet.label)}>{m.name}</h3>
                       </div>
                     ))}
 
@@ -1097,7 +1141,7 @@ function PromptTester() {
                   <React.Fragment key={input.id}>
                     {/* Input label — outside the bordered grid */}
                     <div className="px-4 py-4 flex flex-col justify-start">
-                      <h3 className="text-sm font-semibold text-foreground mb-1.5">{input.name}</h3>
+                      <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.amber.label)}>{input.name}</h3>
                       <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                         {input.content}
                       </pre>
@@ -1106,7 +1150,7 @@ function PromptTester() {
                     {/* Prompt label — model-first only, outside the bordered grid */}
                     {viewMode === 'model-first' && (
                       <div className="px-4 py-4 flex flex-col justify-start">
-                        <h3 className="text-sm font-semibold text-foreground mb-1.5">{snapActivePrompt.name}</h3>
+                        <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.blue.label)}>{snapActivePrompt.name}</h3>
                         <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                           {snapActivePrompt.prompt || '(empty)'}
                         </pre>

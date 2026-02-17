@@ -45,6 +45,12 @@ interface TestConfig {
   temperature: number;
 }
 
+interface ResultSnapshot {
+  inputs: InputItem[];
+  prompts: PromptItem[];
+  models: ModelItem[];
+}
+
 // ─── Default Models ──────────────────────────────────────────
 
 const DEFAULT_MODELS: ModelItem[] = [
@@ -401,6 +407,9 @@ function PromptTester() {
   // Model pricing from OpenRouter
   const [modelPricing, setModelPricing] = useState<Record<string, { prompt: number; completion: number }>>({});
 
+  // Result snapshot — captures state at evaluation time
+  const [resultSnapshot, setResultSnapshot] = useState<ResultSnapshot | null>(null);
+
   // Current test
   const currentTest = tests.find(t => t.id === activeTestId) ?? tests[0]!;
   const { inputs, prompts, models, temperature } = currentTest;
@@ -409,7 +418,7 @@ function PromptTester() {
   const activeInput = inputs.find(i => i.id === activeInputId) ?? inputs[0]!;
   const activePrompt = prompts.find(p => p.id === activePromptId) ?? prompts[0]!;
   const activeModel = models.find(m => m.id === activeModelId) ?? models[0]!;
-  const hasAnyResults = prompts.some(p => Object.keys(p.results).length > 0);
+  const hasAnyResults = resultSnapshot !== null && resultSnapshot.prompts.some(p => Object.keys(p.results).length > 0);
   const validInputs = inputs.filter(i => i.content.trim().length > 0);
 
   // ─── Update current test helper ────────────────────────────
@@ -444,6 +453,12 @@ function PromptTester() {
       nextTestNum.current = Math.max(maxTestNum + 1, savedTests.length + 1);
 
       syncCounters(active);
+
+      // Restore persisted result snapshot
+      const savedSnapshot = cacheLoad<ResultSnapshot>(`snapshot:${activeId}`);
+      if (savedSnapshot) {
+        setResultSnapshot(savedSnapshot);
+      }
     }
 
     // Fetch pricing from OpenRouter
@@ -500,6 +515,15 @@ function PromptTester() {
     if (apiKey) cacheSaveStr('apiKey', apiKey);
   }, [apiKey]);
 
+  // Persist result snapshot
+  const snapshotFirstRun = useRef(true);
+  useEffect(() => {
+    if (snapshotFirstRun.current) { snapshotFirstRun.current = false; return; }
+    if (resultSnapshot) {
+      cacheSave(`snapshot:${activeTestId}`, resultSnapshot);
+    }
+  }, [resultSnapshot, activeTestId]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => { evalAbortRef.current?.abort(); };
@@ -546,6 +570,10 @@ function PromptTester() {
       setActivePromptId(test.prompts[0]?.id ?? 'p1');
       setActiveModelId(test.models[0]?.id ?? 'm1');
       syncCounters(test);
+
+      // Restore or clear snapshot for the selected test
+      const savedSnapshot = cacheLoad<ResultSnapshot>(`snapshot:${id}`);
+      setResultSnapshot(savedSnapshot);
     }
     setExpandedCells(new Set());
   }, [tests]);
@@ -686,6 +714,12 @@ function PromptTester() {
 
     const testId = activeTestId;
 
+    // Snapshot inputs and models at eval start
+    const snapshotInputs = validIns.map(i => ({ ...i }));
+    const snapshotModels = models.map(m => ({ ...m }));
+    // Build snapshot prompts as results come in
+    const snapshotPrompts: PromptItem[] = toRun.map(p => ({ ...p, results: {} }));
+
     try {
       for (let i = 0; i < toRun.length; i++) {
         if (controller.signal.aborted) break;
@@ -722,6 +756,7 @@ function PromptTester() {
         const data = await res.json();
         const results = data.results ?? {};
 
+        // Update live test state
         setTests(prev =>
           prev.map(t =>
             t.id === testId
@@ -729,6 +764,10 @@ function PromptTester() {
               : t
           )
         );
+
+        // Update snapshot
+        const sp = snapshotPrompts.find(p => p.id === prompt.id);
+        if (sp) sp.results = results;
       }
     } catch (err) {
       if (controller.signal.aborted && evalAbortRef.current !== controller) return;
@@ -742,6 +781,13 @@ function PromptTester() {
       evalAbortRef.current = null;
       setEvaluating(false);
       setEvalProgress('');
+
+      // Save result snapshot
+      setResultSnapshot({
+        inputs: snapshotInputs,
+        prompts: snapshotPrompts,
+        models: snapshotModels,
+      });
     }
   }, [prompts, inputs, models, temperature, apiKey, activeTestId]);
 
@@ -928,8 +974,38 @@ function PromptTester() {
         </section>
       )}
 
-      {!evaluating && hasAnyResults && (
-        <section className="space-y-3">
+      {!evaluating && hasAnyResults && resultSnapshot && (() => {
+        const snap = resultSnapshot;
+        const snapInputs = snap.inputs;
+        const snapPrompts = snap.prompts;
+        const snapModels = snap.models;
+
+        // For model-first: sidebar picks prompt from snapshot, columns are models from snapshot
+        // For prompt-first: sidebar picks model from snapshot, columns are prompts from snapshot
+        const snapActivePrompt = snapPrompts.find(p => p.id === activePromptId) ?? snapPrompts[0]!;
+        const snapActiveModel = snapModels.find(m => m.id === activeModelId) ?? snapModels[0]!;
+
+        const cols = viewMode === 'model-first' ? snapModels : snapPrompts;
+        const colCount = cols.length;
+
+        function getTotals(colItem: ModelItem | PromptItem) {
+          let tIn = 0, tOut = 0, tCost = 0;
+          const mId = viewMode === 'model-first' ? (colItem as ModelItem).modelId : snapActiveModel.modelId;
+          const pItem = viewMode === 'model-first' ? snapActivePrompt : (colItem as PromptItem);
+          const pricing = modelPricing[mId];
+          for (const inp of snapInputs) {
+            const cell = pItem.results[mId]?.[inp.id];
+            if (cell && !cell.error) {
+              const i = cell.input_tokens ?? 0, o = cell.output_tokens ?? 0;
+              tIn += i; tOut += o;
+              if (pricing) tCost += i * pricing.prompt + o * pricing.completion;
+            }
+          }
+          return { tIn, tOut, tCost };
+        }
+
+        return (
+        <section className="space-y-4">
           <div className="flex items-center gap-3">
             <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground/70">
               Results
@@ -956,160 +1032,149 @@ function PromptTester() {
           </div>
 
           <div className="flex gap-4">
+            {/* Sidebar — on the left */}
             {viewMode === 'model-first' ? (
               <ItemList
-                items={prompts}
-                activeId={activePromptId}
+                items={snapPrompts}
+                activeId={snapActivePrompt.id}
                 onSelect={setActivePromptId}
                 readOnly
               />
             ) : (
               <ItemList
-                items={models}
-                activeId={activeModelId}
+                items={snapModels}
+                activeId={snapActiveModel.id}
                 onSelect={setActiveModelId}
                 readOnly
               />
             )}
 
-            <div className="flex-1 overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[200px] min-w-[200px]">
-                      Input
-                    </th>
-                    {viewMode === 'model-first'
-                      ? models.map(model => (
-                          <th key={model.id} className="px-3 py-2 text-left font-medium text-muted-foreground min-w-[250px]">
-                            <span className="font-mono text-xs">{model.name}</span>
-                          </th>
-                        ))
-                      : prompts.map(p => (
-                          <th key={p.id} className="px-3 py-2 text-left font-medium text-muted-foreground min-w-[250px]">
-                            <span className="text-xs">{p.name}</span>
-                          </th>
-                        ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {validInputs.map(input => (
-                    <tr key={input.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2 align-top w-[200px] min-w-[200px]">
-                        <div className="space-y-1">
-                          <span className="text-xs font-medium text-foreground">{input.name}</span>
-                          <pre className="max-h-[120px] overflow-y-auto rounded bg-muted/30 px-2 py-1 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
-                            {input.content.length > 500 ? input.content.slice(0, 500) + '...' : input.content}
-                          </pre>
+            {/* Results grid */}
+            <div className="flex-1 overflow-x-auto">
+              <div
+                className="grid gap-0"
+                style={{
+                  gridTemplateColumns: viewMode === 'model-first'
+                    ? `240px 240px repeat(${colCount}, minmax(280px, 1fr))`
+                    : `240px repeat(${colCount}, minmax(280px, 1fr))`,
+                }}
+              >
+                {/* ── Row 0: column headers (prompt or model names + text) ── */}
+                <div /> {/* empty corner — input */}
+                {viewMode === 'model-first' && <div />} {/* empty corner — prompt */}
+                {viewMode === 'prompt-first'
+                  ? snapPrompts.map(p => (
+                      <div key={p.id} className="px-4 pb-3">
+                        <h3 className="text-sm font-semibold text-foreground mb-1.5">{p.name}</h3>
+                        <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
+                          {p.prompt || '(empty)'}
+                        </pre>
+                      </div>
+                    ))
+                  : snapModels.map(m => (
+                      <div key={m.id} className="px-4 pb-3">
+                        <h3 className="text-sm font-semibold font-mono text-foreground">{m.name}</h3>
+                      </div>
+                    ))}
+
+                {/* ── Data rows: input label + result cells ── */}
+                {snapInputs.map((input, rowIdx) => (
+                  <React.Fragment key={input.id}>
+                    {/* Input label — outside the bordered grid */}
+                    <div className="px-4 py-4 flex flex-col justify-start">
+                      <h3 className="text-sm font-semibold text-foreground mb-1.5">{input.name}</h3>
+                      <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
+                        {input.content}
+                      </pre>
+                    </div>
+
+                    {/* Prompt label — model-first only, outside the bordered grid */}
+                    {viewMode === 'model-first' && (
+                      <div className="px-4 py-4 flex flex-col justify-start">
+                        <h3 className="text-sm font-semibold text-foreground mb-1.5">{snapActivePrompt.name}</h3>
+                        <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
+                          {snapActivePrompt.prompt || '(empty)'}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Result cells — bordered */}
+                    {cols.map((colItem, colIdx) => {
+                      const mId = viewMode === 'model-first' ? (colItem as ModelItem).modelId : snapActiveModel.modelId;
+                      const pItem = viewMode === 'model-first' ? snapActivePrompt : (colItem as PromptItem);
+                      const cell = pItem.results[mId]?.[input.id];
+                      const cellKey = `${pItem.id}:${colItem.id}:${input.id}`;
+
+                      return (
+                        <div
+                          key={colItem.id}
+                          className={cn(
+                            'border-t-2 border-l-2 border-border bg-background p-4 min-h-[120px]',
+                            colIdx === colCount - 1 && 'border-r-2',
+                            rowIdx === snapInputs.length - 1 && 'border-b-2',
+                          )}
+                        >
+                          {!cell ? (
+                            <span className="text-xs text-muted-foreground/40 italic">No result</span>
+                          ) : cell.error ? (
+                            <p className="text-xs text-destructive">{cell.error.length > 200 ? cell.error.slice(0, 200) + '...' : cell.error}</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {cell.output && (
+                                <button
+                                  onClick={() => toggleCell(cellKey)}
+                                  className="text-left text-xs leading-relaxed hover:text-foreground transition-colors w-full"
+                                >
+                                  <span className={cn('block whitespace-pre-wrap', !expandedCells.has(cellKey) && 'line-clamp-6')}>
+                                    {cell.output}
+                                  </span>
+                                  {cell.output.length > 200 && (
+                                    <span className="text-[10px] text-primary/60 mt-1 inline-block">
+                                      {expandedCells.has(cellKey) ? 'show less' : 'show more'}
+                                    </span>
+                                  )}
+                                </button>
+                              )}
+                              {cell.input_tokens != null && cell.output_tokens != null && (
+                                <p className="text-[10px] text-muted-foreground/50">
+                                  {cell.input_tokens}+{cell.output_tokens} tok
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </td>
-                      {viewMode === 'model-first'
-                        ? models.map(model => {
-                            const cell = activePrompt.results[model.modelId]?.[input.id];
-                            const cellKey = `${activePromptId}:${model.id}:${input.id}`;
-                            return (
-                              <ResultCell
-                                key={model.id}
-                                cell={cell}
-                                cellKey={cellKey}
-                                isExpanded={expandedCells.has(cellKey)}
-                                onToggle={toggleCell}
-                              />
-                            );
-                          })
-                        : prompts.map(p => {
-                            const cell = p.results[activeModel.modelId]?.[input.id];
-                            const cellKey = `${p.id}:${activeModelId}:${input.id}`;
-                            return (
-                              <ResultCell
-                                key={p.id}
-                                cell={cell}
-                                cellKey={cellKey}
-                                isExpanded={expandedCells.has(cellKey)}
-                                onToggle={toggleCell}
-                              />
-                            );
-                          })}
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-muted/20">
-                    <td className="px-3 py-2 text-xs font-medium text-muted-foreground">Totals</td>
-                    {viewMode === 'model-first'
-                      ? models.map(model => {
-                          let totalInput = 0;
-                          let totalOutput = 0;
-                          let totalCost = 0;
-                          const pricing = modelPricing[model.modelId];
-                          for (const input of validInputs) {
-                            const cell = activePrompt.results[model.modelId]?.[input.id];
-                            if (cell && !cell.error) {
-                              const inp = cell.input_tokens ?? 0;
-                              const out = cell.output_tokens ?? 0;
-                              totalInput += inp;
-                              totalOutput += out;
-                              if (pricing) {
-                                totalCost += inp * pricing.prompt + out * pricing.completion;
-                              }
-                            }
-                          }
-                          return (
-                            <td key={model.id} className="px-3 py-2 text-xs text-muted-foreground">
-                              <div className="space-y-0.5">
-                                {totalInput + totalOutput > 0 && (
-                                  <p>{totalInput}+{totalOutput} = {totalInput + totalOutput} tok</p>
-                                )}
-                                {totalCost > 0 && (
-                                  <p className="text-primary/80 font-medium">
-                                    ${totalCost < 0.0001 ? totalCost.toFixed(6) : totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(2)} total
-                                  </p>
-                                )}
-                                {totalInput + totalOutput === 0 && '-'}
-                              </div>
-                            </td>
-                          );
-                        })
-                      : prompts.map(p => {
-                          let totalInput = 0;
-                          let totalOutput = 0;
-                          let totalCost = 0;
-                          const pricing = modelPricing[activeModel.modelId];
-                          for (const input of validInputs) {
-                            const cell = p.results[activeModel.modelId]?.[input.id];
-                            if (cell && !cell.error) {
-                              const inp = cell.input_tokens ?? 0;
-                              const out = cell.output_tokens ?? 0;
-                              totalInput += inp;
-                              totalOutput += out;
-                              if (pricing) {
-                                totalCost += inp * pricing.prompt + out * pricing.completion;
-                              }
-                            }
-                          }
-                          return (
-                            <td key={p.id} className="px-3 py-2 text-xs text-muted-foreground">
-                              <div className="space-y-0.5">
-                                {totalInput + totalOutput > 0 && (
-                                  <p>{totalInput}+{totalOutput} = {totalInput + totalOutput} tok</p>
-                                )}
-                                {totalCost > 0 && (
-                                  <p className="text-primary/80 font-medium">
-                                    ${totalCost < 0.0001 ? totalCost.toFixed(6) : totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(2)} total
-                                  </p>
-                                )}
-                                {totalInput + totalOutput === 0 && '-'}
-                              </div>
-                            </td>
-                          );
-                        })}
-                  </tr>
-                </tfoot>
-              </table>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+
+                {/* ── Totals row ── */}
+                <div className="px-4 py-3 flex items-center">
+                  <span className="text-xs font-medium text-muted-foreground">Totals</span>
+                </div>
+                {viewMode === 'model-first' && <div />}
+                {cols.map(colItem => {
+                  const { tIn, tOut, tCost } = getTotals(colItem);
+                  return (
+                    <div key={colItem.id} className="px-4 py-3 border-t border-border/50">
+                      <div className="space-y-0.5 text-xs text-muted-foreground">
+                        {tIn + tOut > 0 && <p>{tIn}+{tOut} = {tIn + tOut} tok</p>}
+                        {tCost > 0 && (
+                          <p className="text-primary/80 font-medium">
+                            ${tCost < 0.0001 ? tCost.toFixed(6) : tCost < 0.01 ? tCost.toFixed(4) : tCost.toFixed(2)}
+                          </p>
+                        )}
+                        {tIn + tOut === 0 && '-'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>
-      )}
+        );
+      })()}
     </div>
   );
 }

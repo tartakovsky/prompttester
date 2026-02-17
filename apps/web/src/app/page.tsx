@@ -1098,6 +1098,7 @@ function PromptTester() {
                 activeId={snapActivePrompt.id}
                 onSelect={setActivePromptId}
                 readOnly
+                accent="blue"
               />
             ) : (
               <ItemList
@@ -1105,6 +1106,7 @@ function PromptTester() {
                 activeId={snapActiveModel.id}
                 onSelect={setActiveModelId}
                 readOnly
+                accent="violet"
               />
             )}
 
@@ -1124,7 +1126,7 @@ function PromptTester() {
                 {viewMode === 'prompt-first'
                   ? snapPrompts.map(p => (
                       <div key={p.id} className="px-4 pb-3">
-                        <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.blue.title)}>{p.name}</h3>
+                        <h3 className={cn('text-xs font-medium uppercase tracking-widest mb-1.5', accentStyles.blue.title)}>{p.name}</h3>
                         <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                           {p.prompt || '(empty)'}
                         </pre>
@@ -1132,7 +1134,7 @@ function PromptTester() {
                     ))
                   : snapModels.map(m => (
                       <div key={m.id} className="px-4 pb-3">
-                        <h3 className={cn('text-sm font-semibold font-mono', accentStyles.violet.title)}>{m.name}</h3>
+                        <h3 className={cn('text-xs font-medium uppercase tracking-widest', accentStyles.violet.title)}>{m.name}</h3>
                       </div>
                     ))}
 
@@ -1141,7 +1143,7 @@ function PromptTester() {
                   <React.Fragment key={input.id}>
                     {/* Input label — outside the bordered grid */}
                     <div className="px-4 py-4 flex flex-col justify-start">
-                      <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.teal.label)}>{input.name}</h3>
+                      <h3 className={cn('text-xs font-medium uppercase tracking-widest mb-1.5', accentStyles.teal.title)}>{input.name}</h3>
                       <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                         {input.content}
                       </pre>
@@ -1150,7 +1152,7 @@ function PromptTester() {
                     {/* Prompt label — model-first only, outside the bordered grid */}
                     {viewMode === 'model-first' && (
                       <div className="px-4 py-4 flex flex-col justify-start">
-                        <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.blue.title)}>{snapActivePrompt.name}</h3>
+                        <h3 className={cn('text-xs font-medium uppercase tracking-widest mb-1.5', accentStyles.blue.title)}>{snapActivePrompt.name}</h3>
                         <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                           {snapActivePrompt.prompt || '(empty)'}
                         </pre>

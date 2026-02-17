@@ -115,13 +115,13 @@ function genId(prefix: string): string {
 
 // ─── Item List (shared sidebar component) ────────────────────
 
-type SectionAccent = 'amber' | 'blue' | 'violet' | 'neutral';
+type SectionAccent = 'teal' | 'blue' | 'violet' | 'neutral';
 
-const accentStyles: Record<SectionAccent, { active: string; hover: string; add: string; title: string; label: string }> = {
-  amber:   { active: 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100', hover: 'hover:border-amber-300 dark:hover:border-amber-600', add: 'hover:border-amber-300 dark:hover:border-amber-600', title: 'text-amber-600 dark:text-amber-400', label: 'text-amber-700 dark:text-amber-300' },
-  blue:    { active: 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100', hover: 'hover:border-blue-300 dark:hover:border-blue-600', add: 'hover:border-blue-300 dark:hover:border-blue-600', title: 'text-blue-600 dark:text-blue-400', label: 'text-blue-700 dark:text-blue-300' },
-  violet:  { active: 'border-violet-400 bg-violet-50 dark:bg-violet-900/20 text-violet-900 dark:text-violet-100', hover: 'hover:border-violet-300 dark:hover:border-violet-600', add: 'hover:border-violet-300 dark:hover:border-violet-600', title: 'text-violet-600 dark:text-violet-400', label: 'text-violet-700 dark:text-violet-300' },
-  neutral: { active: 'border-primary bg-primary/10 text-foreground', hover: 'hover:border-primary/40', add: 'hover:border-primary/40', title: 'text-muted-foreground', label: 'text-foreground' },
+const accentStyles: Record<SectionAccent, { active: string; hover: string; add: string; title: string }> = {
+  teal:    { active: 'border-teal-400 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-100', hover: 'hover:border-teal-300 dark:hover:border-teal-600', add: 'hover:border-teal-300 dark:hover:border-teal-600', title: 'text-teal-600 dark:text-teal-400' },
+  blue:    { active: 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100', hover: 'hover:border-blue-300 dark:hover:border-blue-600', add: 'hover:border-blue-300 dark:hover:border-blue-600', title: 'text-blue-600 dark:text-blue-400' },
+  violet:  { active: 'border-violet-400 bg-violet-50 dark:bg-violet-900/20 text-violet-900 dark:text-violet-100', hover: 'hover:border-violet-300 dark:hover:border-violet-600', add: 'hover:border-violet-300 dark:hover:border-violet-600', title: 'text-violet-600 dark:text-violet-400' },
+  neutral: { active: 'border-primary bg-primary/10 text-foreground', hover: 'hover:border-primary/40', add: 'hover:border-primary/40', title: 'text-muted-foreground' },
 };
 
 function ItemList({
@@ -901,7 +901,7 @@ function PromptTester() {
       {/* ═══ INPUTS ═══ */}
       <section className="w-full max-w-3xl space-y-3 mt-4">
         <div className="flex items-center gap-3">
-          <h2 className={cn('text-xs font-medium uppercase tracking-widest', accentStyles.amber.title)}>
+          <h2 className={cn('text-xs font-medium uppercase tracking-widest', accentStyles.teal.title)}>
             Inputs ({validInputs.length} with content)
           </h2>
           <Separator className="flex-1" />
@@ -915,7 +915,7 @@ function PromptTester() {
             onAdd={addInput}
             onRemove={removeInput}
             onRename={renameInput}
-            accent="amber"
+            accent="teal"
           />
           <div className="flex-1 min-w-0">
             <textarea
@@ -1124,7 +1124,7 @@ function PromptTester() {
                 {viewMode === 'prompt-first'
                   ? snapPrompts.map(p => (
                       <div key={p.id} className="px-4 pb-3">
-                        <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.blue.label)}>{p.name}</h3>
+                        <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.blue.title)}>{p.name}</h3>
                         <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                           {p.prompt || '(empty)'}
                         </pre>
@@ -1132,7 +1132,7 @@ function PromptTester() {
                     ))
                   : snapModels.map(m => (
                       <div key={m.id} className="px-4 pb-3">
-                        <h3 className={cn('text-sm font-semibold font-mono', accentStyles.violet.label)}>{m.name}</h3>
+                        <h3 className={cn('text-sm font-semibold font-mono', accentStyles.violet.title)}>{m.name}</h3>
                       </div>
                     ))}
 
@@ -1141,7 +1141,7 @@ function PromptTester() {
                   <React.Fragment key={input.id}>
                     {/* Input label — outside the bordered grid */}
                     <div className="px-4 py-4 flex flex-col justify-start">
-                      <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.amber.label)}>{input.name}</h3>
+                      <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.teal.label)}>{input.name}</h3>
                       <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                         {input.content}
                       </pre>
@@ -1150,7 +1150,7 @@ function PromptTester() {
                     {/* Prompt label — model-first only, outside the bordered grid */}
                     {viewMode === 'model-first' && (
                       <div className="px-4 py-4 flex flex-col justify-start">
-                        <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.blue.label)}>{snapActivePrompt.name}</h3>
+                        <h3 className={cn('text-sm font-semibold mb-1.5', accentStyles.blue.title)}>{snapActivePrompt.name}</h3>
                         <pre className="max-h-[100px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
                           {snapActivePrompt.prompt || '(empty)'}
                         </pre>

@@ -198,13 +198,28 @@ The page fetches model pricing from OpenRouter's public `/api/v1/models` endpoin
   - Scorer: 10,000 runs/month estimate
   - Commenter: 3,000 runs/month estimate
 
+## Authentication
+
+Uses **Clerk** as a pure gatekeeper — no database, no user table, no server-side user state. Clerk controls who can access the page; everything else is localStorage.
+
+**Pattern:**
+- `ClerkProvider` wraps the app in `layout.tsx` with `@clerk/themes` dark theme
+- `proxy.ts` (formerly `middleware.ts`, renamed for Next.js 16) runs `clerkMiddleware()` to make `auth()` available server-side
+- Page component uses `useAuth()` to check sign-in state: shows `<SignIn withSignUp />` if not authenticated, shows `<PromptTester />` if authenticated
+- Layout header shows `<UserButton />` (signed in) or sign-in button with modal dialog (signed out)
+- `SignInOrUpDialog` component renders Clerk's `<SignIn withSignUp routing="virtual" />` in a ShadCN Dialog for modal sign-in without page navigation
+
+**No webhook handler** — unlike AutoSMM, there's no user sync to a database. Clerk is the only source of truth for user identity.
+
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | **Yes** | Clerk publishable key (public, needed at build time) |
+| `CLERK_SECRET_KEY` | **Yes** | Clerk secret key (server-side only) |
 | `OPENROUTER_API_KEY` | No | Fallback API key if user doesn't provide one via UI |
 
-That's it. No database URLs, no auth secrets, no service tokens. The tool is designed to work with zero server-side configuration — just deploy and go.
+No database URLs, no inter-service secrets. Just Clerk keys + optional OpenRouter fallback.
 
 ## Deployment
 
@@ -235,10 +250,12 @@ The project deploys to **Railway** as a single service. Railway auto-deploys fro
 
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | **Yes** | Clerk publishable key |
+| `CLERK_SECRET_KEY` | **Yes** | Clerk secret key |
 | `OPENROUTER_API_KEY` | No | Optional fallback API key. Users can also provide their own key via the UI. |
 | `PORT` | No | Railway sets this automatically (defaults to 3000) |
 
-That's it — no database, no auth secrets, no inter-service communication.
+No database, no inter-service communication. Just Clerk + optional OpenRouter fallback.
 
 **Railway CLI** (`railway`) is available for managing the deployment:
 
@@ -315,7 +332,10 @@ npm run start        # Start production server
 
 If you're picking up this project in a new session, read these files:
 
-- `apps/web/src/app/page.tsx` — All UI logic, state, components
+- `apps/web/src/app/page.tsx` — All UI logic, state, components (auth gate + PromptTester)
 - `apps/web/src/app/api/evaluate/route.ts` — OpenRouter integration, evaluation logic
+- `apps/web/src/app/layout.tsx` — ClerkProvider, header with auth UI
+- `apps/web/src/proxy.ts` — Clerk middleware (makes auth() available server-side)
+- `apps/web/src/components/sign-in-or-up-dialog.tsx` — Modal sign-in component
 - `apps/web/src/app/globals.css` — Theme configuration
 - This worklog — Architecture and purpose overview

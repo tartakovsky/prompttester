@@ -696,7 +696,7 @@ function PromptTester() {
     const num = nextModelNum.current++;
     const parts = trimmed.split('/');
     const displayName = (parts.length > 1 ? parts[1]! : parts[0]!).replace(/:.*$/, '');
-    const item: ModelItem = { id: genId('m'), name: displayName, modelId: trimmed };
+    const item: ModelItem = { id: genId('m'), name: displayName, modelId: trimmed, enabled: true };
     updateCurrentTest(t => ({ ...t, models: [...t.models, item] }));
     setActiveModelId(item.id);
     setNewModelId('');
@@ -704,7 +704,7 @@ function PromptTester() {
 
   const addEmptyModel = useCallback(() => {
     const num = nextModelNum.current++;
-    const item: ModelItem = { id: genId('m'), name: `Model ${num}`, modelId: '' };
+    const item: ModelItem = { id: genId('m'), name: `Model ${num}`, modelId: '', enabled: true };
     updateCurrentTest(t => ({ ...t, models: [...t.models, item] }));
     setActiveModelId(item.id);
   }, [updateCurrentTest]);

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (@media (prefers-color-scheme: dark));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -58,35 +58,41 @@
   --radius: 0.625rem;
 }
 
-.dark {
-  --background: oklch(0 0 0);
-  --foreground: oklch(1 0 0);
-  --card: oklch(0.14 0 0);
-  --card-foreground: oklch(1 0 0);
-  --popover: oklch(0.18 0 0);
-  --popover-foreground: oklch(1 0 0);
-  --primary: oklch(1 0 0);
-  --primary-foreground: oklch(0 0 0);
-  --secondary: oklch(0.25 0 0);
-  --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(0.23 0 0);
-  --muted-foreground: oklch(0.72 0 0);
-  --accent: oklch(0.32 0 0);
-  --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0.69 0.2 23.91);
-  --border: oklch(0.26 0 0);
-  --input: oklch(0.32 0 0);
-  --ring: oklch(0.72 0 0);
-  --radius: 0.625rem;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0 0 0);
+    --foreground: oklch(1 0 0);
+    --card: oklch(0.14 0 0);
+    --card-foreground: oklch(1 0 0);
+    --popover: oklch(0.18 0 0);
+    --popover-foreground: oklch(1 0 0);
+    --primary: oklch(1 0 0);
+    --primary-foreground: oklch(0 0 0);
+    --secondary: oklch(0.25 0 0);
+    --secondary-foreground: oklch(1 0 0);
+    --muted: oklch(0.23 0 0);
+    --muted-foreground: oklch(0.72 0 0);
+    --accent: oklch(0.32 0 0);
+    --accent-foreground: oklch(1 0 0);
+    --destructive: oklch(0.69 0.2 23.91);
+    --border: oklch(0.26 0 0);
+    --input: oklch(0.32 0 0);
+    --ring: oklch(0.72 0 0);
+    --radius: 0.625rem;
+  }
 }
 
 @layer base {
   * {
     border-color: var(--border);
   }
+  html {
+    overscroll-behavior: none;
+  }
   body {
     background-color: var(--background);
     color: var(--foreground);
+    overscroll-behavior: none;
   }
   button {
     cursor: pointer;

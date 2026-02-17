@@ -5,7 +5,6 @@ import {
   SignedOut,
   UserButton,
 } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
 import { SignInOrUpDialog } from "@/components/sign-in-or-up-dialog";
 import "./globals.css";
 
@@ -22,8 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider appearance={{ baseTheme: dark }}>
-      <html lang="en" className="dark" suppressHydrationWarning>
+    <ClerkProvider>
+      <html lang="en" suppressHydrationWarning>
         <body className="min-h-screen antialiased">
           <header className="flex items-center justify-between border-b border-border px-4 py-2 md:px-6">
             <span className="text-sm font-semibold tracking-tight">Prompt Tester</span>

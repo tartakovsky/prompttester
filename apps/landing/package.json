@@ -1,28 +1,19 @@
 {
-  "name": "prompttester-web",
+  "name": "prompttester-landing",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack -p 3010",
+    "dev": "next dev --turbopack -p 3011",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3011",
     "lint": "next lint"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.37.4",
-    "@clerk/themes": "^2.4.52",
-    "@radix-ui/react-label": "^2.1.8",
-    "@radix-ui/react-select": "^2.2.6",
-    "@radix-ui/react-separator": "^1.1.8",
-    "@radix-ui/react-slot": "^1.2.4",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.562.0",
     "next": "^16.1.1",
-    "radix-ui": "^1.4.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "clsx": "^2.1.1",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.8",
     "tw-animate-css": "^1.3.4"

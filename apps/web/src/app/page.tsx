@@ -38,16 +38,50 @@ export default function PromptTesterPage() {
 }
 
 function PromptTester() {
-  const [apiKey, setApiKey] = useState('');
+  // ─── Initialize state from localStorage synchronously ───
+  const [initialState] = useState(() => {
+    const savedTests = cacheLoad<TestConfig[]>('tests');
+    const hasSaved = savedTests && savedTests.length > 0;
+
+    if (hasSaved) {
+      for (const test of savedTests) {
+        for (const m of test.models) {
+          if (m.enabled === undefined) m.enabled = true;
+        }
+      }
+    }
+
+    const tests = hasSaved ? savedTests : [makeDefaultTest('t1', 'Test 1')];
+    const savedActiveId = cacheLoadStr('activeTestId');
+    const activeTestId = hasSaved && savedActiveId && savedTests.some(t => t.id === savedActiveId)
+      ? savedActiveId
+      : tests[0]!.id;
+
+    const activeTest = tests.find(t => t.id === activeTestId) ?? tests[0]!;
+    const snapshot = cacheLoad<ResultSnapshot>(`snapshot:${activeTestId}`);
+
+    return {
+      apiKey: cacheLoadStr('apiKey') ?? '',
+      tests,
+      activeTestId,
+      activeInputId: activeTest.inputs[0]?.id ?? 'i1',
+      activePromptId: activeTest.prompts[0]?.id ?? 'p1',
+      activeModelId: activeTest.models[0]?.id ?? 'm1',
+      snapshot,
+      activeTest,
+    };
+  });
+
+  const [apiKey, setApiKey] = useState(initialState.apiKey);
   const [showKey, setShowKey] = useState(false);
 
-  const [tests, setTests] = useState<TestConfig[]>([makeDefaultTest('t1', 'Test 1')]);
-  const [activeTestId, setActiveTestId] = useState('t1');
+  const [tests, setTests] = useState<TestConfig[]>(initialState.tests);
+  const [activeTestId, setActiveTestId] = useState(initialState.activeTestId);
   const nextTestNum = useRef(2);
 
-  const [activeInputId, setActiveInputId] = useState('i1');
-  const [activePromptId, setActivePromptId] = useState('p1');
-  const [activeModelId, setActiveModelId] = useState('m1');
+  const [activeInputId, setActiveInputId] = useState(initialState.activeInputId);
+  const [activePromptId, setActivePromptId] = useState(initialState.activePromptId);
+  const [activeModelId, setActiveModelId] = useState(initialState.activeModelId);
   const [newModelId, setNewModelId] = useState('');
 
   const nextInputNum = useRef(2);
@@ -64,7 +98,7 @@ function PromptTester() {
   const evalAbortRef = useRef<AbortController | null>(null);
 
   const [modelPricing, setModelPricing] = useState<Record<string, { prompt: number; completion: number }>>({});
-  const [resultSnapshot, setResultSnapshot] = useState<ResultSnapshot | null>(null);
+  const [resultSnapshot, setResultSnapshot] = useState<ResultSnapshot | null>(initialState.snapshot);
 
   const currentTest = tests.find(t => t.id === activeTestId) ?? tests[0]!;
   const { inputs, prompts, models, temperature } = currentTest;
@@ -80,43 +114,17 @@ function PromptTester() {
     setTests(prev => prev.map(t => t.id === activeTestId ? updater(t) : t));
   }, [activeTestId]);
 
-  // ─── Load from cache on mount ─────────────────────────────
+  // ─── Sync counters from initial state ────────────────────
 
-  const cacheLoaded = useRef(false);
+  const cacheLoaded = useRef(true); // Already loaded via lazy initializers
 
   useEffect(() => {
-    const savedKey = cacheLoadStr('apiKey');
-    if (savedKey) setApiKey(savedKey);
-
-    const savedTests = cacheLoad<TestConfig[]>('tests');
-    if (savedTests && savedTests.length > 0) {
-      for (const test of savedTests) {
-        for (const m of test.models) {
-          if (m.enabled === undefined) m.enabled = true;
-        }
-      }
-      setTests(savedTests);
-      const savedActiveId = cacheLoadStr('activeTestId');
-      const activeId = savedActiveId && savedTests.some(t => t.id === savedActiveId) ? savedActiveId : savedTests[0]!.id;
-      setActiveTestId(activeId);
-
-      const active = savedTests.find(t => t.id === activeId) ?? savedTests[0]!;
-      setActiveInputId(active.inputs[0]?.id ?? 'i1');
-      setActivePromptId(active.prompts[0]?.id ?? 'p1');
-      setActiveModelId(active.models[0]?.id ?? 'm1');
-
-      const maxTestNum = savedTests.reduce((max, t) => {
-        const match = t.name.match(/Test (\d+)/);
-        return match ? Math.max(max, parseInt(match[1]!, 10)) : max;
-      }, 0);
-      nextTestNum.current = Math.max(maxTestNum + 1, savedTests.length + 1);
-      syncCounters(active);
-
-      const savedSnapshot = cacheLoad<ResultSnapshot>(`snapshot:${activeId}`);
-      if (savedSnapshot) setResultSnapshot(savedSnapshot);
-    }
-
-    cacheLoaded.current = true;
+    const maxTestNum = tests.reduce((max, t) => {
+      const match = t.name.match(/Test (\d+)/);
+      return match ? Math.max(max, parseInt(match[1]!, 10)) : max;
+    }, 0);
+    nextTestNum.current = Math.max(maxTestNum + 1, tests.length + 1);
+    syncCounters(currentTest);
 
     void fetch('https://openrouter.ai/api/v1/models')
       .then(r => r.ok ? r.json() : null)
@@ -169,10 +177,12 @@ function PromptTester() {
     cacheSaveStr('apiKey', apiKey);
   }, [apiKey]);
 
+  const snapshotTestIdRef = useRef(activeTestId);
+  snapshotTestIdRef.current = activeTestId;
+
   useEffect(() => {
-    if (!cacheLoaded.current) return;
-    if (resultSnapshot) cacheSave(`snapshot:${activeTestId}`, resultSnapshot);
-  }, [resultSnapshot, activeTestId]);
+    if (resultSnapshot) cacheSave(`snapshot:${snapshotTestIdRef.current}`, resultSnapshot);
+  }, [resultSnapshot]);
 
   useEffect(() => {
     return () => { evalAbortRef.current?.abort(); };
@@ -492,7 +502,7 @@ function PromptTester() {
               accent="teal"
             />
           </div>
-          <div className="flex-1 flex flex-col min-w-0 relative">
+          <div className="flex-1 flex flex-col min-w-0">
             <textarea
               className="flex-1 resize-none border-0 rounded-none p-4 font-mono text-sm bg-transparent outline-none focus:ring-0"
               value={activeInput.content}
@@ -500,7 +510,7 @@ function PromptTester() {
               placeholder="Enter input content here..."
             />
             {activeInput.content.trim() && (
-              <div className="absolute top-2 right-2 flex items-center gap-2 bg-white rounded-md px-2 py-1 text-xs text-muted-foreground">
+              <div className="px-4 py-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                 <span>{activeInput.content.trim().split(/\s+/).filter(Boolean).length} words</span>
                 <CopyButton value={activeInput.content} />
               </div>
@@ -528,7 +538,7 @@ function PromptTester() {
               accent="blue"
             />
           </div>
-          <div className="flex-1 flex flex-col min-w-0 relative">
+          <div className="flex-1 flex flex-col min-w-0">
             <textarea
               className="flex-1 resize-none border-0 rounded-none p-4 font-mono text-sm bg-transparent outline-none focus:ring-0"
               value={activePrompt.prompt}
@@ -536,7 +546,7 @@ function PromptTester() {
               placeholder="Enter system prompt here..."
             />
             {activePrompt.prompt.trim() && (
-              <div className="absolute top-2 right-2 flex items-center gap-2 bg-white rounded-md px-2 py-1 text-xs text-muted-foreground">
+              <div className="px-4 py-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                 <span>{activePrompt.prompt.trim().split(/\s+/).filter(Boolean).length} words</span>
                 <CopyButton value={activePrompt.prompt} />
               </div>
@@ -785,11 +795,14 @@ function PromptTester() {
                       <td key={colItem.id} className="p-3 border-t border-border/50">
                         <div className="space-y-0.5 text-xs text-muted-foreground font-mono">
                           {tIn + tOut > 0 && <p>{tIn}+{tOut} = {tIn + tOut} tok</p>}
-                          {tCost > 0 && (
-                            <p className="text-primary/80 font-medium">
-                              ${tCost < 0.0001 ? tCost.toFixed(6) : tCost < 0.01 ? tCost.toFixed(4) : tCost.toFixed(2)}
-                            </p>
-                          )}
+                          {tCost > 0 && (() => {
+                            const cost1k = tCost * 1000;
+                            return (
+                              <p className="text-primary/80 font-medium">
+                                ${cost1k < 0.01 ? cost1k.toFixed(4) : cost1k.toFixed(2)}/1K runs
+                              </p>
+                            );
+                          })()}
                           {tIn + tOut === 0 && <span>-</span>}
                         </div>
                       </td>

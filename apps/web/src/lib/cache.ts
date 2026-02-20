@@ -13,7 +13,9 @@ export function cacheLoad<T>(key: string): T | null {
 export function cacheSave(key: string, value: unknown) {
   try {
     localStorage.setItem(`${PREFIX}${key}`, JSON.stringify(value));
-  } catch { /* quota exceeded — ignore */ }
+  } catch (e) {
+    console.warn(`[prompttester] Failed to save "${key}" to localStorage:`, e);
+  }
 }
 
 export function cacheLoadStr(key: string): string | null {
@@ -27,5 +29,7 @@ export function cacheLoadStr(key: string): string | null {
 export function cacheSaveStr(key: string, value: string) {
   try {
     localStorage.setItem(`${PREFIX}${key}`, value);
-  } catch { /* quota exceeded — ignore */ }
+  } catch (e) {
+    console.warn(`[prompttester] Failed to save "${key}" to localStorage:`, e);
+  }
 }

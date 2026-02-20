@@ -14,7 +14,7 @@ export async function callOpenRouter(
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: systemPrompt },
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
         { role: 'user', content: userMessage },
       ],
       temperature,

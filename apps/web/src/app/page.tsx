@@ -74,7 +74,7 @@ function PromptTester() {
   const activeModel = models.find(m => m.id === activeModelId) ?? models[0]!;
   const hasAnyResults = resultSnapshot !== null && resultSnapshot.prompts.some(p => Object.keys(p.results).length > 0);
   const enabledModels = models.filter(m => m.enabled !== false);
-  const validInputs = inputs.filter(i => i.content.trim().length > 0);
+  const inputsWithContent = inputs.filter(i => i.content.trim().length > 0);
 
   const updateCurrentTest = useCallback((updater: (test: TestConfig) => TestConfig) => {
     setTests(prev => prev.map(t => t.id === activeTestId ? updater(t) : t));
@@ -322,15 +322,17 @@ function PromptTester() {
 
   // ─── Run Evaluation ───────────────────────────────────────
 
-  const promptsToRun = prompts.filter(p => p.prompt.trim().length > 0);
-  const canEval = validInputs.length > 0 && enabledModels.length > 0 && promptsToRun.length > 0 && !evaluating && apiKey.trim().length > 0;
+  const promptsWithContent = prompts.filter(p => p.prompt.trim().length > 0);
+  const hasContent = inputsWithContent.length > 0 || promptsWithContent.length > 0;
+  const canEval = hasContent && enabledModels.length > 0 && prompts.length > 0 && inputs.length > 0 && !evaluating && apiKey.trim().length > 0;
 
   const runEval = useCallback(async () => {
-    const toRun = prompts.filter(p => p.prompt.trim().length > 0);
-    const validIns = inputs.filter(i => i.content.trim().length > 0);
+    const toRun = prompts;
+    const validIns = inputs;
     const activeModels = models.filter(m => m.enabled !== false);
     const modelIds = activeModels.map(m => m.modelId);
-    if (toRun.length === 0 || validIns.length === 0 || modelIds.length === 0) return;
+    const anyContent = toRun.some(p => p.prompt.trim().length > 0) || validIns.some(i => i.content.trim().length > 0);
+    if (!anyContent || modelIds.length === 0) return;
 
     evalAbortRef.current?.abort();
     const controller = new AbortController();
@@ -475,7 +477,7 @@ function PromptTester() {
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden max-w-4xl">
         <div className="px-4 py-3 border-b bg-muted">
           <h2 className={cn('text-sm font-medium uppercase tracking-wider', accentStyles.teal.title)}>
-            Inputs ({validInputs.length} with content)
+            Inputs ({inputsWithContent.length} with content)
           </h2>
         </div>
         <div className="flex flex-col md:flex-row" style={{ height: '280px' }}>
@@ -617,8 +619,8 @@ function PromptTester() {
           {evaluating ? evalProgress || 'Evaluating...' : 'Run All Prompts'}
         </Button>
         <span className="text-sm text-muted-foreground">
-          {promptsToRun.length} prompts &times; {enabledModels.length} models &times; {validInputs.length} inputs ={' '}
-          {promptsToRun.length * enabledModels.length * validInputs.length} runs
+          {prompts.length} prompts &times; {enabledModels.length} models &times; {inputs.length} inputs ={' '}
+          {prompts.length * enabledModels.length * inputs.length} runs
         </span>
         {!apiKey.trim() && (
           <span className="text-xs text-amber-500 dark:text-amber-400">Enter your OpenRouter API key above</span>
@@ -735,7 +737,7 @@ function PromptTester() {
                         'text-left p-3 border-b border-border text-xs font-mono font-semibold uppercase',
                         isModelFirst ? accentStyles.violet.title : accentStyles.blue.title
                       )}
-                      style={{ width: '450px', minWidth: '350px' }}
+                      style={{ minWidth: '420px' }}
                     >
                       {col.name}
                     </th>
@@ -758,7 +760,7 @@ function PromptTester() {
                       const cKey = `${pItem.id}:${colItem.id}:${input.id}`;
 
                       return (
-                        <td key={colItem.id} className="p-3 align-top">
+                        <td key={colItem.id} className="p-1.5 align-top">
                           <ResultCellContent
                             cell={cell}
                             cellKey={cKey}

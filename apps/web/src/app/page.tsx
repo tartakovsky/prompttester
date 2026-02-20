@@ -55,6 +55,7 @@ function PromptTester() {
   const nextModelNum = useRef(7);
 
   const [viewMode, setViewMode] = useState<'model-first' | 'prompt-first'>('model-first');
+  const [resultsUnfolded, setResultsUnfolded] = useState(false);
   const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
 
   const [evaluating, setEvaluating] = useState(false);
@@ -672,23 +673,31 @@ function PromptTester() {
             <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
               Results
             </h2>
-            <div className="flex rounded-lg border border-border overflow-hidden">
-              <Button
-                variant={isModelFirst ? 'secondary' : 'ghost'}
-                size="sm"
-                className="rounded-none border-0 h-8 px-3"
-                onClick={() => setViewMode('model-first')}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setResultsUnfolded(u => !u)}
+                className="text-xs text-primary hover:underline font-medium"
               >
-                Model first
-              </Button>
-              <Button
-                variant={!isModelFirst ? 'secondary' : 'ghost'}
-                size="sm"
-                className="rounded-none border-0 h-8 px-3"
-                onClick={() => setViewMode('prompt-first')}
-              >
-                Prompt first
-              </Button>
+                {resultsUnfolded ? 'Fold' : 'Unfold'}
+              </button>
+              <div className="flex rounded-lg border border-border overflow-hidden">
+                <Button
+                  variant={isModelFirst ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="rounded-none border-0 h-8 px-3"
+                  onClick={() => setViewMode('model-first')}
+                >
+                  Model first
+                </Button>
+                <Button
+                  variant={!isModelFirst ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="rounded-none border-0 h-8 px-3"
+                  onClick={() => setViewMode('prompt-first')}
+                >
+                  Prompt first
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -726,7 +735,7 @@ function PromptTester() {
                         'text-left p-3 border-b border-border text-xs font-mono font-semibold uppercase',
                         isModelFirst ? accentStyles.violet.title : accentStyles.blue.title
                       )}
-                      style={{ width: '350px', minWidth: '350px' }}
+                      style={{ width: '450px', minWidth: '350px' }}
                     >
                       {col.name}
                     </th>
@@ -755,6 +764,7 @@ function PromptTester() {
                             cellKey={cKey}
                             isExpanded={expandedCells.has(cKey)}
                             onToggle={toggleCell}
+                            unfolded={resultsUnfolded}
                           />
                         </td>
                       );

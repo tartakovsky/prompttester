@@ -2,17 +2,20 @@
 
 import { type CellResult } from '@/types';
 import { CopyButton } from '@/components/copy-button';
+import { cn } from '@/lib/utils';
 
 export function ResultCellContent({
   cell,
   cellKey,
   isExpanded,
   onToggle,
+  unfolded,
 }: {
   cell: CellResult | undefined;
   cellKey: string;
   isExpanded: boolean;
   onToggle: (key: string) => void;
+  unfolded: boolean;
 }) {
   if (!cell) {
     return (
@@ -32,17 +35,21 @@ export function ResultCellContent({
 
   const maxLength = 200;
   const isLong = (cell.output?.length ?? 0) > maxLength;
+  const showFull = unfolded || isExpanded;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 h-full flex flex-col hover:shadow-md transition-shadow max-h-[300px] relative group">
+    <div className={cn(
+      'rounded-lg border border-border bg-card p-4 h-full flex flex-col hover:shadow-md transition-shadow relative group',
+      !unfolded && 'max-h-[300px]',
+    )}>
       <div className="flex-1 min-h-0 overflow-y-auto">
         {cell.output && (
           <>
             <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-              {isExpanded ? cell.output : cell.output.slice(0, maxLength)}
-              {isLong && !isExpanded && '...'}
+              {showFull ? cell.output : cell.output.slice(0, maxLength)}
+              {isLong && !showFull && '...'}
             </p>
-            {isLong && (
+            {isLong && !unfolded && (
               <button
                 onClick={() => onToggle(cellKey)}
                 className="text-xs text-primary hover:underline mt-2 font-medium"

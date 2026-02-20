@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withPublicBody } from '@/lib/api';
-import { EvaluateRequestSchema } from '@prompttester/types';
+import { EvaluateRequestSchema } from '@/types';
 import { callOpenRouter } from '@/services/openrouter';
 import { env } from '@/lib/env';
 

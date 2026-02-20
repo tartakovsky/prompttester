@@ -1,3 +1,19 @@
+import { z } from 'zod';
+
+export const EvaluateRequestSchema = z.object({
+  prompt: z.string().min(1),
+  models: z.array(z.string().min(1)).min(1),
+  inputs: z.array(
+    z.object({
+      input_id: z.string().min(1),
+      content: z.string().min(1),
+    })
+  ).min(1),
+  temperature: z.number().min(0).max(2).default(0.7),
+});
+
+export type EvaluateRequest = z.infer<typeof EvaluateRequestSchema>;
+
 export interface ListItem {
   id: string;
   name: string;

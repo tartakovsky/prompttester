@@ -7,9 +7,11 @@ export type {
   TestConfig,
   ResultSnapshot,
   SectionAccent,
+  EvaluateRequest,
 } from './prompt-tester';
 
 export {
+  EvaluateRequestSchema,
   accentStyles,
   DEFAULT_MODELS,
   genId,

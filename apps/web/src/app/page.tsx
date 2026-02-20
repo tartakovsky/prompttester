@@ -18,6 +18,7 @@ import {
 } from '@/types';
 import { ItemList } from '@/components/item-list';
 import { ResultCellContent } from '@/components/result-cell';
+import { CopyButton } from '@/components/copy-button';
 import { TestSelector } from '@/components/test-selector';
 
 export default function PromptTesterPage() {
@@ -470,7 +471,7 @@ function PromptTester() {
       </div>
 
       {/* Inputs */}
-      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden max-w-4xl">
         <div className="px-4 py-3 border-b bg-muted">
           <h2 className={cn('text-sm font-medium uppercase tracking-wider', accentStyles.teal.title)}>
             Inputs ({validInputs.length} with content)
@@ -488,7 +489,7 @@ function PromptTester() {
               accent="teal"
             />
           </div>
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 relative">
             <textarea
               className="flex-1 resize-none border-0 rounded-none p-4 font-mono text-sm bg-transparent outline-none focus:ring-0"
               value={activeInput.content}
@@ -496,8 +497,9 @@ function PromptTester() {
               placeholder="Enter input content here..."
             />
             {activeInput.content.trim() && (
-              <div className="px-4 py-1.5 border-t text-xs text-muted-foreground bg-secondary">
-                {activeInput.content.trim().split(/\s+/).filter(Boolean).length} words
+              <div className="absolute top-2 right-2 flex items-center gap-2 bg-white rounded-md px-2 py-1 text-xs text-muted-foreground">
+                <span>{activeInput.content.trim().split(/\s+/).filter(Boolean).length} words</span>
+                <CopyButton value={activeInput.content} />
               </div>
             )}
           </div>
@@ -505,7 +507,7 @@ function PromptTester() {
       </div>
 
       {/* Prompts */}
-      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden max-w-4xl">
         <div className="px-4 py-3 border-b bg-muted">
           <h2 className={cn('text-sm font-medium uppercase tracking-wider', accentStyles.blue.title)}>
             Prompts
@@ -523,7 +525,7 @@ function PromptTester() {
               accent="blue"
             />
           </div>
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 relative">
             <textarea
               className="flex-1 resize-none border-0 rounded-none p-4 font-mono text-sm bg-transparent outline-none focus:ring-0"
               value={activePrompt.prompt}
@@ -531,8 +533,9 @@ function PromptTester() {
               placeholder="Enter system prompt here..."
             />
             {activePrompt.prompt.trim() && (
-              <div className="px-4 py-1.5 border-t text-xs text-muted-foreground bg-secondary">
-                {activePrompt.prompt.trim().split(/\s+/).filter(Boolean).length} words
+              <div className="absolute top-2 right-2 flex items-center gap-2 bg-white rounded-md px-2 py-1 text-xs text-muted-foreground">
+                <span>{activePrompt.prompt.trim().split(/\s+/).filter(Boolean).length} words</span>
+                <CopyButton value={activePrompt.prompt} />
               </div>
             )}
           </div>
@@ -540,7 +543,7 @@ function PromptTester() {
       </div>
 
       {/* Models */}
-      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden h-full flex flex-col">
+      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden h-full flex flex-col max-w-4xl">
         <div className="px-4 py-3 border-b bg-muted">
           <h2 className={cn('text-sm font-medium uppercase tracking-wider', accentStyles.violet.title)}>
             Models ({enabledModels.length} of {models.length} enabled)

@@ -1,6 +1,7 @@
 'use client';
 
 import { type CellResult } from '@/types';
+import { CopyButton } from '@/components/copy-button';
 
 export function ResultCellContent({
   cell,
@@ -33,7 +34,7 @@ export function ResultCellContent({
   const isLong = (cell.output?.length ?? 0) > maxLength;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 h-full flex flex-col hover:shadow-md transition-shadow max-h-[300px]">
+    <div className="rounded-lg border border-border bg-card p-4 h-full flex flex-col hover:shadow-md transition-shadow max-h-[300px] relative group">
       <div className="flex-1 min-h-0 overflow-y-auto">
         {cell.output && (
           <>
@@ -52,11 +53,12 @@ export function ResultCellContent({
           </>
         )}
       </div>
-      {cell.input_tokens != null && cell.output_tokens != null && (
-        <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground font-mono">
+      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground font-mono">
+        {cell.input_tokens != null && cell.output_tokens != null ? (
           <span>{cell.input_tokens}+{cell.output_tokens} tok</span>
-        </div>
-      )}
+        ) : <span />}
+        <CopyButton value={cell.output ?? ''} className="opacity-0 group-hover:opacity-100" />
+      </div>
     </div>
   );
 }

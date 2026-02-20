@@ -1,403 +1,24 @@
 'use client';
 
-import * as React from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth, SignIn } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-
-// ─── Types ───────────────────────────────────────────────────
-
-interface ListItem {
-  id: string;
-  name: string;
-}
-
-interface InputItem extends ListItem {
-  content: string;
-}
-
-interface PromptItem extends ListItem {
-  prompt: string;
-  results: Record<string, Record<string, CellResult>>;
-}
-
-interface ModelItem extends ListItem {
-  modelId: string;
-  enabled: boolean;
-}
-
-interface CellResult {
-  output: string | null;
-  error: string | null;
-  input_tokens: number | null;
-  output_tokens: number | null;
-}
-
-interface TestConfig {
-  id: string;
-  name: string;
-  inputs: InputItem[];
-  prompts: PromptItem[];
-  models: ModelItem[];
-  temperature: number;
-}
-
-interface ResultSnapshot {
-  inputs: InputItem[];
-  prompts: PromptItem[];
-  models: ModelItem[];
-}
-
-// ─── Default Models ──────────────────────────────────────────
-
-const DEFAULT_MODELS: ModelItem[] = [
-  { id: 'm1', name: 'mistral-small-3.2-24b-instruct', modelId: 'mistralai/mistral-small-3.2-24b-instruct', enabled: true },
-  { id: 'm2', name: 'gemini-2.5-flash-lite', modelId: 'google/gemini-2.5-flash-lite', enabled: true },
-  { id: 'm3', name: 'gemini-3-flash-preview', modelId: 'google/gemini-3-flash-preview', enabled: true },
-  { id: 'm4', name: 'claude-opus-4.6', modelId: 'anthropic/claude-opus-4.6', enabled: true },
-  { id: 'm5', name: 'claude-opus-4.5', modelId: 'anthropic/claude-opus-4.5', enabled: true },
-  { id: 'm6', name: 'gpt-5.2-chat', modelId: 'openai/gpt-5.2-chat', enabled: true },
-];
-
-function makeDefaultTest(id: string, name: string): TestConfig {
-  return {
-    id,
-    name,
-    inputs: [{ id: 'i1', name: 'Input 1', content: '' }],
-    prompts: [{ id: 'p1', name: 'Prompt 1', prompt: '', results: {} }],
-    models: [...DEFAULT_MODELS],
-    temperature: 0.7,
-  };
-}
-
-// ─── Cache Helpers ───────────────────────────────────────────
-
-function cacheLoad<T>(key: string): T | null {
-  try {
-    const raw = localStorage.getItem(`prompttester:${key}`);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
-function cacheSave(key: string, value: unknown) {
-  try {
-    localStorage.setItem(`prompttester:${key}`, JSON.stringify(value));
-  } catch { /* ignore */ }
-}
-
-function cacheLoadStr(key: string): string | null {
-  try {
-    return localStorage.getItem(`prompttester:${key}`);
-  } catch {
-    return null;
-  }
-}
-
-function cacheSaveStr(key: string, value: string) {
-  try {
-    localStorage.setItem(`prompttester:${key}`, value);
-  } catch { /* ignore */ }
-}
-
-// ─── Helpers ─────────────────────────────────────────────────
-
-let nextId = 1;
-function genId(prefix: string): string {
-  return `${prefix}${Date.now()}-${nextId++}`;
-}
-
-// ─── Item List (shared sidebar component) ────────────────────
-
-type SectionAccent = 'teal' | 'blue' | 'violet' | 'neutral';
-
-const accentStyles: Record<SectionAccent, { active: string; hover: string; add: string; title: string }> = {
-  teal:    { active: 'border-teal-400 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-100', hover: 'hover:border-teal-300 dark:hover:border-teal-600', add: 'hover:border-teal-300 dark:hover:border-teal-600', title: 'text-teal-600 dark:text-teal-400' },
-  blue:    { active: 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100', hover: 'hover:border-blue-300 dark:hover:border-blue-600', add: 'hover:border-blue-300 dark:hover:border-blue-600', title: 'text-blue-600 dark:text-blue-400' },
-  violet:  { active: 'border-violet-400 bg-violet-50 dark:bg-violet-900/20 text-violet-900 dark:text-violet-100', hover: 'hover:border-violet-300 dark:hover:border-violet-600', add: 'hover:border-violet-300 dark:hover:border-violet-600', title: 'text-violet-600 dark:text-violet-400' },
-  neutral: { active: 'border-primary bg-primary/10 text-foreground', hover: 'hover:border-primary/40', add: 'hover:border-primary/40', title: 'text-muted-foreground' },
-};
-
-function ItemList({
-  items,
-  activeId,
-  onSelect,
-  onAdd,
-  onRemove,
-  onRename,
-  onToggle,
-  readOnly = false,
-  accent = 'neutral',
-}: {
-  items: (ListItem & { enabled?: boolean })[];
-  activeId: string;
-  onSelect: (id: string) => void;
-  onAdd?: () => void;
-  onRemove?: (id: string) => void;
-  onRename?: (id: string, name: string) => void;
-  onToggle?: (id: string) => void;
-  readOnly?: boolean;
-  accent?: SectionAccent;
-}) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editingId && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editingId]);
-
-  const finish = () => {
-    if (editingId && editName.trim()) {
-      onRename?.(editingId, editName.trim());
-    }
-    setEditingId(null);
-  };
-
-  return (
-    <div className="flex w-[170px] min-w-[170px] md:w-[200px] md:min-w-[200px] flex-col gap-0.5">
-      {items.map((item) => {
-        const isDisabled = item.enabled === false;
-        return (
-          <div
-            key={item.id}
-            className={cn(
-              'group flex items-center rounded-md border px-2.5 py-1.5 text-sm cursor-pointer select-none transition-colors',
-              isDisabled && 'opacity-40',
-              item.id === activeId && !isDisabled
-                ? accentStyles[accent].active
-                : `border-border text-muted-foreground ${accentStyles[accent].hover} hover:text-foreground`
-            )}
-            onClick={() => onSelect(item.id)}
-            onDoubleClick={() => {
-              if (readOnly) return;
-              setEditingId(item.id);
-              setEditName(item.name);
-            }}
-          >
-            {onToggle && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggle(item.id);
-                }}
-                className={cn(
-                  'mr-1.5 shrink-0 h-3.5 w-3.5 rounded-sm border transition-colors',
-                  isDisabled
-                    ? 'border-muted-foreground/30 bg-transparent'
-                    : `border-current bg-current`
-                )}
-                title={isDisabled ? 'Enable' : 'Disable'}
-              >
-                {!isDisabled && (
-                  <svg viewBox="0 0 14 14" className="h-full w-full text-white dark:text-black">
-                    <path d="M3 7l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
-            )}
-            {editingId === item.id ? (
-              <input
-                ref={inputRef}
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onBlur={finish}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') finish();
-                  if (e.key === 'Escape') setEditingId(null);
-                }}
-                className="w-full bg-transparent text-sm outline-none"
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className={cn('flex-1 truncate', isDisabled && 'line-through')}>{item.name}</span>
-            )}
-            {!readOnly && !onToggle && items.length > 1 && editingId !== item.id && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove?.(item.id);
-                }}
-                className="ml-1 shrink-0 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-              >
-                &times;
-              </button>
-            )}
-          </div>
-        );
-      })}
-      {!readOnly && onAdd && (
-        <button
-          onClick={onAdd}
-          className={cn('flex items-center justify-center rounded-md border border-dashed border-border px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors', accentStyles[accent].add)}
-        >
-          +
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── Result Cell ─────────────────────────────────────────────
-
-function ResultCellContent({
-  cell,
-  cellKey,
-  isExpanded,
-  onToggle,
-}: {
-  cell: CellResult | undefined;
-  cellKey: string;
-  isExpanded: boolean;
-  onToggle: (key: string) => void;
-}) {
-  if (!cell) {
-    return (
-      <div className="p-4 text-xs text-muted-foreground bg-muted rounded-md border border-dashed border-border text-center">
-        No result
-      </div>
-    );
-  }
-
-  if (cell.error) {
-    return (
-      <div className="rounded-lg border border-border bg-card p-4">
-        <p className="text-xs text-destructive">{cell.error.length > 150 ? cell.error.slice(0, 150) + '...' : cell.error}</p>
-      </div>
-    );
-  }
-
-  const maxLength = 200;
-  const isLong = (cell.output?.length ?? 0) > maxLength;
-
-  return (
-    <div className="rounded-lg border border-border bg-card p-4 h-full flex flex-col hover:shadow-md transition-shadow max-h-[300px]">
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {cell.output && (
-          <>
-            <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-              {isExpanded ? cell.output : cell.output.slice(0, maxLength)}
-              {isLong && !isExpanded && '...'}
-            </p>
-            {isLong && (
-              <button
-                onClick={() => onToggle(cellKey)}
-                className="text-xs text-primary hover:underline mt-2 font-medium"
-              >
-                {isExpanded ? 'show less' : 'show more'}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-      {cell.input_tokens != null && cell.output_tokens != null && (
-        <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground font-mono">
-          <span>{cell.input_tokens}+{cell.output_tokens} tok</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Test Selector Bar ───────────────────────────────────────
-
-function TestSelector({
-  tests,
-  activeTestId,
-  onSelect,
-  onAdd,
-  onDelete,
-  onRename,
-}: {
-  tests: TestConfig[];
-  activeTestId: string;
-  onSelect: (id: string) => void;
-  onAdd: () => void;
-  onDelete: (id: string) => void;
-  onRename: (id: string, name: string) => void;
-}) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editingId && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editingId]);
-
-  const finish = () => {
-    if (editingId && editName.trim()) {
-      onRename(editingId, editName.trim());
-    }
-    setEditingId(null);
-  };
-
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {tests.map((test) => (
-        <div
-          key={test.id}
-          className={cn(
-            'group flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm cursor-pointer select-none transition-colors',
-            test.id === activeTestId
-              ? 'border-primary bg-primary/10 text-foreground font-medium'
-              : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
-          )}
-          onClick={() => onSelect(test.id)}
-          onDoubleClick={() => {
-            setEditingId(test.id);
-            setEditName(test.name);
-          }}
-        >
-          {editingId === test.id ? (
-            <input
-              ref={inputRef}
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={finish}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') finish();
-                if (e.key === 'Escape') setEditingId(null);
-              }}
-              className="w-24 bg-transparent text-sm outline-none"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="truncate max-w-[150px]">{test.name}</span>
-          )}
-          {tests.length > 1 && editingId !== test.id && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(test.id);
-              }}
-              className="ml-0.5 shrink-0 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-            >
-              &times;
-            </button>
-          )}
-        </div>
-      ))}
-      <button
-        onClick={onAdd}
-        className="flex items-center justify-center rounded-md border border-dashed border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
-      >
-        + New Test
-      </button>
-    </div>
-  );
-}
-
-// ─── Main Component ──────────────────────────────────────────
+import { cacheLoad, cacheSave, cacheLoadStr, cacheSaveStr } from '@/lib/cache';
+import {
+  type InputItem,
+  type PromptItem,
+  type ModelItem,
+  type TestConfig,
+  type ResultSnapshot,
+  accentStyles,
+  genId,
+  makeDefaultTest,
+} from '@/types';
+import { ItemList } from '@/components/item-list';
+import { ResultCellContent } from '@/components/result-cell';
+import { TestSelector } from '@/components/test-selector';
 
 export default function PromptTesterPage() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -416,47 +37,36 @@ export default function PromptTesterPage() {
 }
 
 function PromptTester() {
-  // API key (global, not per-test)
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
 
-  // Tests
   const [tests, setTests] = useState<TestConfig[]>([makeDefaultTest('t1', 'Test 1')]);
   const [activeTestId, setActiveTestId] = useState('t1');
   const nextTestNum = useRef(2);
 
-  // Per-test active selections
   const [activeInputId, setActiveInputId] = useState('i1');
   const [activePromptId, setActivePromptId] = useState('p1');
   const [activeModelId, setActiveModelId] = useState('m1');
   const [newModelId, setNewModelId] = useState('');
 
-  // Counter refs for naming
   const nextInputNum = useRef(2);
   const nextPromptNum = useRef(2);
-  const nextModelNum = useRef(DEFAULT_MODELS.length + 1);
+  const nextModelNum = useRef(7);
 
-  // Results view
   const [viewMode, setViewMode] = useState<'model-first' | 'prompt-first'>('model-first');
   const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
 
-  // Evaluate state
   const [evaluating, setEvaluating] = useState(false);
   const [evalProgress, setEvalProgress] = useState('');
   const [evalError, setEvalError] = useState<string | null>(null);
   const evalAbortRef = useRef<AbortController | null>(null);
 
-  // Model pricing from OpenRouter
   const [modelPricing, setModelPricing] = useState<Record<string, { prompt: number; completion: number }>>({});
-
-  // Result snapshot — captures state at evaluation time
   const [resultSnapshot, setResultSnapshot] = useState<ResultSnapshot | null>(null);
 
-  // Current test
   const currentTest = tests.find(t => t.id === activeTestId) ?? tests[0]!;
   const { inputs, prompts, models, temperature } = currentTest;
 
-  // Derived
   const activeInput = inputs.find(i => i.id === activeInputId) ?? inputs[0]!;
   const activePrompt = prompts.find(p => p.id === activePromptId) ?? prompts[0]!;
   const activeModel = models.find(m => m.id === activeModelId) ?? models[0]!;
@@ -464,13 +74,13 @@ function PromptTester() {
   const enabledModels = models.filter(m => m.enabled !== false);
   const validInputs = inputs.filter(i => i.content.trim().length > 0);
 
-  // ─── Update current test helper ────────────────────────────
-
   const updateCurrentTest = useCallback((updater: (test: TestConfig) => TestConfig) => {
     setTests(prev => prev.map(t => t.id === activeTestId ? updater(t) : t));
   }, [activeTestId]);
 
   // ─── Load from cache on mount ─────────────────────────────
+
+  const cacheLoaded = useRef(false);
 
   useEffect(() => {
     const savedKey = cacheLoadStr('apiKey');
@@ -478,7 +88,6 @@ function PromptTester() {
 
     const savedTests = cacheLoad<TestConfig[]>('tests');
     if (savedTests && savedTests.length > 0) {
-      // Migrate: add enabled field to models that don't have it
       for (const test of savedTests) {
         for (const m of test.models) {
           if (m.enabled === undefined) m.enabled = true;
@@ -494,27 +103,20 @@ function PromptTester() {
       setActivePromptId(active.prompts[0]?.id ?? 'p1');
       setActiveModelId(active.models[0]?.id ?? 'm1');
 
-      // Restore counters
       const maxTestNum = savedTests.reduce((max, t) => {
         const match = t.name.match(/Test (\d+)/);
         return match ? Math.max(max, parseInt(match[1]!, 10)) : max;
       }, 0);
       nextTestNum.current = Math.max(maxTestNum + 1, savedTests.length + 1);
-
       syncCounters(active);
 
-      // Restore persisted result snapshot
       const savedSnapshot = cacheLoad<ResultSnapshot>(`snapshot:${activeId}`);
-      if (savedSnapshot) {
-        setResultSnapshot(savedSnapshot);
-      }
+      if (savedSnapshot) setResultSnapshot(savedSnapshot);
     }
 
-    // Mark cache as loaded so save effects can start writing
     cacheLoaded.current = true;
 
-    // Fetch pricing from OpenRouter
-    fetch('https://openrouter.ai/api/v1/models')
+    void fetch('https://openrouter.ai/api/v1/models')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data?.data) return;
@@ -529,7 +131,7 @@ function PromptTester() {
         }
         setModelPricing(pricing);
       })
-      .catch(() => {});
+      .catch(() => { /* pricing fetch failed — non-critical */ });
   }, []);
 
   function syncCounters(test: TestConfig) {
@@ -548,8 +150,7 @@ function PromptTester() {
     nextModelNum.current = test.models.length + 1;
   }
 
-  // Auto-save: gated by cacheLoaded to avoid overwriting cache with defaults on re-mount
-  const cacheLoaded = useRef(false);
+  // ─── Auto-save ────────────────────────────────────────────
 
   useEffect(() => {
     if (!cacheLoaded.current) return;
@@ -566,20 +167,16 @@ function PromptTester() {
     cacheSaveStr('apiKey', apiKey);
   }, [apiKey]);
 
-  // Persist result snapshot
   useEffect(() => {
     if (!cacheLoaded.current) return;
-    if (resultSnapshot) {
-      cacheSave(`snapshot:${activeTestId}`, resultSnapshot);
-    }
+    if (resultSnapshot) cacheSave(`snapshot:${activeTestId}`, resultSnapshot);
   }, [resultSnapshot, activeTestId]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => { evalAbortRef.current?.abort(); };
   }, []);
 
-  // ─── Test Management ───────────────────────────────────────
+  // ─── Test Management ──────────────────────────────────────
 
   const addTest = useCallback(() => {
     const num = nextTestNum.current++;
@@ -621,14 +218,13 @@ function PromptTester() {
       setActiveModelId(test.models[0]?.id ?? 'm1');
       syncCounters(test);
 
-      // Restore or clear snapshot for the selected test
       const savedSnapshot = cacheLoad<ResultSnapshot>(`snapshot:${id}`);
       setResultSnapshot(savedSnapshot);
     }
     setExpandedCells(new Set());
   }, [tests]);
 
-  // ─── Input Management ──────────────────────────────────────
+  // ─── Input Management ─────────────────────────────────────
 
   const addInput = useCallback(() => {
     const num = nextInputNum.current++;
@@ -639,10 +235,7 @@ function PromptTester() {
 
   const removeInput = useCallback((id: string) => {
     if (inputs.length <= 1) return;
-    updateCurrentTest(t => ({
-      ...t,
-      inputs: t.inputs.filter(i => i.id !== id),
-    }));
+    updateCurrentTest(t => ({ ...t, inputs: t.inputs.filter(i => i.id !== id) }));
     if (activeInputId === id) {
       setActiveInputId(inputs.find(i => i.id !== id)?.id ?? inputs[0]!.id);
     }
@@ -696,7 +289,7 @@ function PromptTester() {
       setNewModelId('');
       return;
     }
-    const num = nextModelNum.current++;
+    nextModelNum.current++;
     const parts = trimmed.split('/');
     const displayName = (parts.length > 1 ? parts[1]! : parts[0]!).replace(/:.*$/, '');
     const item: ModelItem = { id: genId('m'), name: displayName, modelId: trimmed, enabled: true };
@@ -705,28 +298,6 @@ function PromptTester() {
     setNewModelId('');
   }, [newModelId, models, updateCurrentTest]);
 
-  const addEmptyModel = useCallback(() => {
-    const num = nextModelNum.current++;
-    const item: ModelItem = { id: genId('m'), name: `Model ${num}`, modelId: '', enabled: true };
-    updateCurrentTest(t => ({ ...t, models: [...t.models, item] }));
-    setActiveModelId(item.id);
-  }, [updateCurrentTest]);
-
-  const removeModel = useCallback((id: string) => {
-    if (models.length <= 1) return;
-    updateCurrentTest(t => ({
-      ...t,
-      models: t.models.filter(m => m.id !== id),
-    }));
-    if (activeModelId === id) {
-      setActiveModelId(models.find(m => m.id !== id)?.id ?? models[0]!.id);
-    }
-  }, [models, activeModelId, updateCurrentTest]);
-
-  const renameModel = useCallback((id: string, name: string) => {
-    updateCurrentTest(t => ({ ...t, models: t.models.map(m => m.id === id ? { ...m, name } : m) }));
-  }, [updateCurrentTest]);
-
   const toggleModel = useCallback((id: string) => {
     updateCurrentTest(t => ({
       ...t,
@@ -734,12 +305,9 @@ function PromptTester() {
     }));
   }, [updateCurrentTest]);
 
-
   const setTemperature = useCallback((temp: number) => {
     updateCurrentTest(t => ({ ...t, temperature: temp }));
   }, [updateCurrentTest]);
-
-  // ─── Expand/collapse cells ─────────────────────────────────
 
   const toggleCell = useCallback((cellKey: string) => {
     setExpandedCells(prev => {
@@ -750,7 +318,7 @@ function PromptTester() {
     });
   }, []);
 
-  // ─── Run Evaluation ────────────────────────────────────────
+  // ─── Run Evaluation ───────────────────────────────────────
 
   const promptsToRun = prompts.filter(p => p.prompt.trim().length > 0);
   const canEval = validInputs.length > 0 && enabledModels.length > 0 && promptsToRun.length > 0 && !evaluating && apiKey.trim().length > 0;
@@ -771,11 +339,8 @@ function PromptTester() {
     setEvalError(null);
 
     const testId = activeTestId;
-
-    // Snapshot inputs and models at eval start
     const snapshotInputs = validIns.map(i => ({ ...i }));
     const snapshotModels = activeModels.map(m => ({ ...m }));
-    // Build snapshot prompts as results come in
     const snapshotPrompts: PromptItem[] = toRun.map(p => ({ ...p, results: {} }));
 
     try {
@@ -814,7 +379,6 @@ function PromptTester() {
         const data = await res.json();
         const results = data.results ?? {};
 
-        // Update live test state
         setTests(prev =>
           prev.map(t =>
             t.id === testId
@@ -823,7 +387,6 @@ function PromptTester() {
           )
         );
 
-        // Update snapshot
         const sp = snapshotPrompts.find(p => p.id === prompt.id);
         if (sp) sp.results = results;
       }
@@ -840,7 +403,6 @@ function PromptTester() {
       setEvaluating(false);
       setEvalProgress('');
 
-      // Save result snapshot
       setResultSnapshot({
         inputs: snapshotInputs,
         prompts: snapshotPrompts,
@@ -849,11 +411,10 @@ function PromptTester() {
     }
   }, [prompts, inputs, models, temperature, apiKey, activeTestId]);
 
-  // ─── Render ────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-6 space-y-6">
-      {/* Test Selector */}
       <TestSelector
         tests={tests}
         activeTestId={activeTestId}
@@ -908,7 +469,7 @@ function PromptTester() {
         </div>
       </div>
 
-      {/* ═══ INPUTS ═══ */}
+      {/* Inputs */}
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b bg-muted">
           <h2 className={cn('text-sm font-medium uppercase tracking-wider', accentStyles.teal.title)}>
@@ -943,7 +504,7 @@ function PromptTester() {
         </div>
       </div>
 
-      {/* ═══ PROMPTS ═══ */}
+      {/* Prompts */}
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b bg-muted">
           <h2 className={cn('text-sm font-medium uppercase tracking-wider', accentStyles.blue.title)}>
@@ -978,7 +539,7 @@ function PromptTester() {
         </div>
       </div>
 
-      {/* ═══ MODELS ═══ */}
+      {/* Models */}
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden h-full flex flex-col">
         <div className="px-4 py-3 border-b bg-muted">
           <h2 className={cn('text-sm font-medium uppercase tracking-wider', accentStyles.violet.title)}>
@@ -1019,7 +580,6 @@ function PromptTester() {
               </div>
             ))}
           </div>
-
           <div className="p-3 border-t bg-secondary">
             <div className="flex gap-2">
               <Input
@@ -1027,7 +587,7 @@ function PromptTester() {
                 onChange={(e) => setNewModelId(e.target.value)}
                 placeholder="Add model by ID..."
                 className="h-8 text-sm font-mono"
-                onKeyDown={(e) => e.key === 'Enter' && addModel()}
+                onKeyDown={(e) => { if (e.key === 'Enter') addModel(); }}
               />
               <Button
                 size="sm"
@@ -1046,7 +606,7 @@ function PromptTester() {
       {/* Action Bar */}
       <div className="flex items-center gap-4 py-4">
         <Button
-          onClick={runEval}
+          onClick={() => void runEval()}
           disabled={!canEval}
           className="gap-2"
         >
@@ -1062,7 +622,7 @@ function PromptTester() {
         {evalError && <p className="text-sm text-destructive">{evalError}</p>}
       </div>
 
-      {/* ═══ RESULTS ═══ */}
+      {/* Results */}
       {evaluating && (
         <div className="rounded-lg border border-border bg-card p-8 text-center">
           <div className="flex items-center gap-3 justify-center">
@@ -1095,9 +655,9 @@ function PromptTester() {
           for (const inp of snapInputs) {
             const cell = pItem.results[mId]?.[inp.id];
             if (cell && !cell.error) {
-              const i = cell.input_tokens ?? 0, o = cell.output_tokens ?? 0;
-              tIn += i; tOut += o;
-              if (pricing) tCost += i * pricing.prompt + o * pricing.completion;
+              const inTok = cell.input_tokens ?? 0, outTok = cell.output_tokens ?? 0;
+              tIn += inTok; tOut += outTok;
+              if (pricing) tCost += inTok * pricing.prompt + outTok * pricing.completion;
             }
           }
           return { tIn, tOut, tCost };
@@ -1129,7 +689,6 @@ function PromptTester() {
             </div>
           </div>
 
-          {/* Filter pills */}
           <div className="flex overflow-x-auto gap-2 pb-2">
             {selector.map((item) => (
               <button
@@ -1147,7 +706,6 @@ function PromptTester() {
             ))}
           </div>
 
-          {/* Results table */}
           <div className="overflow-x-auto pb-4">
             <table className="border-collapse" style={{ minWidth: '600px' }}>
               <thead>
@@ -1185,14 +743,14 @@ function PromptTester() {
                       const mId = isModelFirst ? (colItem as ModelItem).modelId : snapActiveModel.modelId;
                       const pItem = isModelFirst ? snapActivePrompt : (colItem as PromptItem);
                       const cell = pItem.results[mId]?.[input.id];
-                      const cellKey = `${pItem.id}:${colItem.id}:${input.id}`;
+                      const cKey = `${pItem.id}:${colItem.id}:${input.id}`;
 
                       return (
                         <td key={colItem.id} className="p-3 align-top">
                           <ResultCellContent
                             cell={cell}
-                            cellKey={cellKey}
-                            isExpanded={expandedCells.has(cellKey)}
+                            cellKey={cKey}
+                            isExpanded={expandedCells.has(cKey)}
                             onToggle={toggleCell}
                           />
                         </td>

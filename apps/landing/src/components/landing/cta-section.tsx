@@ -1,10 +1,6 @@
-import type { FinalCtaContent } from "@/content/landing/types";
+import { type FinalCtaContent } from "@/content/landing/types";
 
-interface CtaSectionProps {
-  content: FinalCtaContent;
-}
-
-export function CtaSection({ content }: CtaSectionProps) {
+export function CtaSection({ content }: { content: FinalCtaContent }) {
   return (
     <section className="mx-auto max-w-5xl px-4 py-16 text-center">
       <h2 className="mb-4 text-2xl font-bold">{content.title}</h2>

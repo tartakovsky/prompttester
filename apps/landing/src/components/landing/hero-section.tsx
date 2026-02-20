@@ -1,10 +1,6 @@
-import type { HeroContent } from "@/content/landing/types";
+import { type HeroContent } from "@/content/landing/types";
 
-interface HeroSectionProps {
-  content: HeroContent;
-}
-
-export function HeroSection({ content }: HeroSectionProps) {
+export function HeroSection({ content }: { content: HeroContent }) {
   const [line1, line2] = content.title.split("\n");
 
   return (

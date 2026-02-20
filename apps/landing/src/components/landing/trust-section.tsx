@@ -1,10 +1,6 @@
-import type { TrustContent } from "@/content/landing/types";
+import { type TrustContent } from "@/content/landing/types";
 
-interface TrustSectionProps {
-  content: TrustContent;
-}
-
-export function TrustSection({ content }: TrustSectionProps) {
+export function TrustSection({ content }: { content: TrustContent }) {
   return (
     <section className="mx-auto max-w-5xl px-4 py-16">
       <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">

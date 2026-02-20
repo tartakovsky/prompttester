@@ -1,8 +1,8 @@
-import type { LandingContent } from "./types";
+import { type LandingPageContent } from "./types";
 
 const APP_URL = "https://app.prompttester.io";
 
-export const landingContent: LandingContent = {
+export const landingContent: LandingPageContent = {
   hero: {
     badge: "Free \u00b7 Private \u00b7 Works with any OpenRouter model",
     title: "Test your prompts\nacross any model",

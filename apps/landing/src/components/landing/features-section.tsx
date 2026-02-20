@@ -1,10 +1,6 @@
-import type { FeaturesContent } from "@/content/landing/types";
+import { type FeaturesContent } from "@/content/landing/types";
 
-interface FeaturesSectionProps {
-  content: FeaturesContent;
-}
-
-export function FeaturesSection({ content }: FeaturesSectionProps) {
+export function FeaturesSection({ content }: { content: FeaturesContent }) {
   return (
     <section className="mx-auto max-w-5xl px-4 py-16">
       <h2 className="mb-10 text-center text-2xl font-bold">{content.title}</h2>
